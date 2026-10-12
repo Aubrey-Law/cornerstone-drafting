@@ -17,13 +17,18 @@ function minutesLabel(value: number) {
 
 export function PlanView({
   data,
+  error = false,
   onBook,
   onAskAssistant,
 }: {
   data: PlanData | null
+  error?: boolean
   onBook: (deadline: PlanData['deadlines'][number]) => void
   onAskAssistant: (prompt: string) => void
 }) {
+  if (error) {
+    return <div role="alert" className="rounded-lg border border-border p-8 text-center text-sm text-muted-foreground">Could not load the plan.</div>
+  }
   if (!data) {
     return <div className="rounded-lg border border-border p-8 text-center text-sm text-muted-foreground">Loading plan…</div>
   }
@@ -106,7 +111,13 @@ export function PlanView({
         <div className="flex items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-semibold text-foreground">Workload · next 10 working days</h2>
-            <p className="text-xs text-muted-foreground">Client time, drafting and internal work against the firm target.</p>
+            <p className="text-xs text-muted-foreground">
+              {data.googleStatus === 'unavailable'
+                ? 'Cornerstone appointments only. Google Calendar is not included.'
+                : data.googleStatus === 'partial'
+                  ? 'Hidden because Google Calendar returned a partial result.'
+                  : 'Client time, drafting and internal work against the firm target.'}
+            </p>
           </div>
           <Button size="sm" variant="outline" onClick={() => onAskAssistant('Plan my week')}>
             <Sparkles className="mr-1 h-3.5 w-3.5" /> Plan with assistant

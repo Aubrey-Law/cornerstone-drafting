@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type { CalendarAppointment } from './types'
+import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import { externalSourceLabel, isExternallyManagedSource } from '@/lib/appointments/types'
 
 interface EventDetail {
@@ -36,6 +37,7 @@ export function EventPrepDrawer({
   open,
   onOpenChange,
   authHeaders,
+  timezone = FIRM_TIMEZONE,
   onReschedule,
   onAppointmentChanged,
   onBookNext,
@@ -44,11 +46,13 @@ export function EventPrepDrawer({
   open: boolean
   onOpenChange: (open: boolean) => void
   authHeaders: () => HeadersInit | undefined
+  timezone?: string
   onReschedule: (appointment: CalendarAppointment) => void
   onAppointmentChanged?: (appointment: CalendarAppointment) => void
   onBookNext: (appointment: CalendarAppointment) => void
 }) {
   const [detail, setDetail] = useState<EventDetail | null>(null)
+  const [detailStatus, setDetailStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [switchingTo, setSwitchingTo] = useState<VideoProvider | null>(null)
   const hasTeamsMeeting = appointment?.onlineMeetingProvider === 'microsoft_teams' && Boolean(appointment.onlineMeetingUrl)
   const hasGoogleMeet = Boolean(appointment?.onlineMeetingUrl) && !hasTeamsMeeting
@@ -98,13 +102,25 @@ export function EventPrepDrawer({
   useEffect(() => {
     if (!open || !appointment) return
     setDetail(null)
+    setDetailStatus('loading')
     const controller = new AbortController()
     void fetch(`/api/admin/calendar/events/${appointment.id}`, {
       headers: authHeaders(),
       signal: controller.signal,
     })
-      .then(response => response.ok ? response.json() : null)
-      .then(setDetail)
+      .then(response => {
+        if (!response.ok) throw new Error(String(response.status))
+        return response.json()
+      })
+      .then(body => {
+        if (controller.signal.aborted) return
+        setDetail(body)
+        setDetailStatus('ready')
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return
+        setDetailStatus('error')
+      })
     return () => controller.abort()
   }, [open, appointment, authHeaders])
 
@@ -113,8 +129,6 @@ export function EventPrepDrawer({
     : appointment?.typeLabel.toLowerCase().includes('draft')
       ? 'var(--stage-active-bg)'
       : 'var(--stage-work-bg)'
-  const calendarStatus = appointment?.calendarShowAsBusy === false ? 'Free' : 'Busy'
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-xl">
@@ -122,14 +136,14 @@ export function EventPrepDrawer({
           <>
             <SheetHeader className="border-b border-border p-5" style={{ background: categoryColor }}>
               <span className="w-fit rounded-full bg-card/80 px-2 py-0.5 text-micro font-medium text-foreground">{appointment.typeLabel}</span>
-              <span
-                className={`w-fit rounded-full ${appointment?.calendarShowAsBusy === false ? 'bg-green-bg text-green' : 'bg-red-bg text-red'} px-2 py-0.5 text-micro font-medium`}
-              >
-                {calendarStatus}
-              </span>
+              {appointment.calendarShowAsBusy === false && (
+                <span className="w-fit rounded-full bg-green-bg px-2 py-0.5 text-micro font-medium text-green">
+                  Free
+                </span>
+              )}
               <SheetTitle className="text-left text-lg">{appointment.attendeeName}{appointment.secondAttendeeName ? ` + ${appointment.secondAttendeeName}` : ''}</SheetTitle>
               <p className="text-xs text-muted-foreground">
-                {new Date(appointment.startTime).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                {new Date(appointment.startTime).toLocaleString('en-US', { timeZone: timezone, weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                 {appointment.locationType ? ` · ${appointment.locationType.replace('_', ' ')}` : ''}
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
@@ -159,7 +173,7 @@ export function EventPrepDrawer({
 
             <div className="space-y-4 p-5">
               <ClientResponses appointment={appointment} />
-              {!detail ? <p className="text-sm text-muted-foreground">Loading meeting context…</p> : (
+              {detailStatus === 'error' ? <p className="text-sm text-muted-foreground" role="alert">Meeting context unavailable.</p> : !detail ? <p className="text-sm text-muted-foreground">Loading meeting context…</p> : (
                 <>
                   <DrawerSection title="Matter summary">
                     {detail.matter ? (

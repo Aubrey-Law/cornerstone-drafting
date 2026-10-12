@@ -115,6 +115,22 @@ describe('CalendarVisibilityPopover', () => {
     expect(Object.keys(lastPutBody().settings)).toEqual(['hiddenCalendarIds'])
   })
 
+  it('states a disconnected Google account once', async () => {
+    const user = userEvent.setup()
+    render(
+      <CalendarVisibilityPopover
+        calendars={[]}
+        hiddenIds={[]}
+        connected={false}
+        error="Google Calendar is not connected"
+        authHeaders={() => ({ Authorization: 'Bearer test-token' })}
+        onChange={vi.fn()}
+      />,
+    )
+    await openPopover(user)
+    expect(screen.getAllByText('Google Calendar is not connected.')).toHaveLength(1)
+  })
+
   it('does not report a change when the save fails', async () => {
     const user = userEvent.setup()
     fetchMock.mockResolvedValue({ ok: false, status: 500 })

@@ -74,7 +74,9 @@ export async function GET(req: NextRequest) {
     .filter(row => row.status === 'scheduled')
     .map(row => ({ startIso: row.start_time, endIso: row.end_time, kind: 'client' as const }))
 
-  let connected = true
+  // Partial Google results stay unpublished so a missing calendar cannot look like a light day.
+  // A disconnected account still publishes Cornerstone appointments, labeled as local-only.
+  let googleStatus: 'included' | 'unavailable' | 'partial' = 'included'
   try {
     const exclude = new Set(
       appointments
@@ -82,17 +84,21 @@ export async function GET(req: NextRequest) {
         .filter((id): id is string => Boolean(id)),
     )
     const view = await listCalendarView(rangeFrom.toISOString(), rangeTo.toISOString())
-    connected = !view.truncated && view.skipped.length === 0
-    const calendarEvents = mapCalendarView(view.raw, exclude)
-    workEvents.push(...calendarEvents
-      .filter(event => !event.isAllDay)
-      .map(event => ({ startIso: event.startIso, endIso: event.endIso, kind: 'internal' as const })))
+    if (view.truncated || view.skipped.length > 0) {
+      googleStatus = 'partial'
+    } else {
+      const calendarEvents = mapCalendarView(view.raw, exclude)
+      workEvents.push(...calendarEvents
+        .filter(event => !event.isAllDay)
+        .map(event => ({ startIso: event.startIso, endIso: event.endIso, kind: 'internal' as const })))
+    }
   } catch {
-    connected = false
+    googleStatus = 'unavailable'
   }
 
-  const days = connected ? aggregateWorkload(dates, workEvents, targetMinutes, todayKey, timezone) : []
-  if (workloadOnly) return NextResponse.json({ connected, days })
+  const connected = googleStatus === 'included'
+  const days = googleStatus === 'partial' ? [] : aggregateWorkload(dates, workEvents, targetMinutes, todayKey, timezone)
+  if (workloadOnly) return NextResponse.json({ connected, googleStatus, days })
   if (!workGraph || !workPreferences) return NextResponse.json({ error: 'Plan unavailable' }, { status: 500 })
 
   const deadlines = tasks
@@ -136,6 +142,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     connected,
+    googleStatus,
     days,
     today: buildCalendarTodayPlan({
       items: workGraph.items,

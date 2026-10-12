@@ -74,7 +74,7 @@ export function CalendarVisibilityPopover({ calendars, hiddenIds, authHeaders, o
         {(!connected || error || truncated || discoveryUnavailable) && (
           <div className="rounded border border-amber-strong-border bg-amber-bg p-2 text-xs text-foreground" role="status">
             {!connected && <p>Google Calendar is not connected.</p>}
-            {error && <p>{error}</p>}
+            {error && !(!connected && /not connected/i.test(error)) && <p>{error}</p>}
             {truncated && <p>Partial calendar results. Narrow the date range to see more events.</p>}
             {discoveryUnavailable && <p>Calendar list unavailable.</p>}
           </div>

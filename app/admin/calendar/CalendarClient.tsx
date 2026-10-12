@@ -47,7 +47,7 @@ import {
   categorize,
   isBlock,
 } from './eventCategories'
-import { instantDayKey } from './calendarTime'
+import { formatPlanHeading, formatSpanHeading, instantDayKey, monthChipStyle, weekWorkloadFromBody, zonedTimeInput } from './calendarTime'
 import { TimeGrid } from './WeekTimeGrid'
 
 const WEEKDAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -65,14 +65,13 @@ function calendarSource(event: ExternalCalendarEvent): string {
   return event.calendarName ? `Google · ${event.calendarName}` : 'Google Calendar'
 }
 
-function availabilityLabel(appointment: CalendarAppointment): string {
-  return appointment.calendarShowAsBusy === false ? 'Free' : 'Busy'
-}
-
-function availabilityClass(appointment: CalendarAppointment): string {
-  return appointment.calendarShowAsBusy === false
-    ? 'bg-green-bg text-green'
-    : 'bg-red-bg text-red'
+/** Busy is the default. Only exceptions get a chip. */
+function exceptionLabel(appointment: CalendarAppointment): string | null {
+  if (appointment.status === 'no_show') return 'No-show'
+  if (appointment.status === 'cancelled') return 'Cancelled'
+  if (appointment.status === 'rescheduled') return 'Rescheduled'
+  if (appointment.calendarShowAsBusy === false) return 'Free'
+  return null
 }
 
 function fmtDayHeading(d: Date): string {
@@ -121,10 +120,6 @@ interface PlanBlockDraft {
   title: string
   durationMinutes: string
   showAsBusy: boolean
-}
-
-function toTimeInputValue(date: Date): string {
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 function parseIntOrNull(value: string): number | null {
@@ -206,6 +201,8 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   const [previewEvents, setPreviewEvents] = useState<ExternalCalendarEvent[]>([])
   const [planBlock, setPlanBlock] = useState<PlanBlockDraft | null>(null)
   const [planBlockSubmitting, setPlanBlockSubmitting] = useState(false)
+  const [googleStatus, setGoogleStatus] = useState<'loading' | 'included' | 'unavailable' | 'partial' | 'failed'>('loading')
+  const [planState, setPlanState] = useState<'loading' | 'ready' | 'error'>('loading')
 
   useEffect(() => {
     try {
@@ -441,9 +438,9 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
     view === 'month'
       ? anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
       : view === 'week'
-        ? `${startOfWeek(anchor).toLocaleDateString('en-US', { month: 'long', day: 'numeric', ...(startOfWeek(anchor).getFullYear() !== addDays(startOfWeek(anchor), 6).getFullYear() ? { year: 'numeric' as const } : {}) })} – ${addDays(startOfWeek(anchor), 6).toLocaleDateString('en-US', { ...(startOfWeek(anchor).getMonth() !== addDays(startOfWeek(anchor), 6).getMonth() ? { month: 'long' as const } : {}), day: 'numeric', year: 'numeric' })}`
+        ? formatSpanHeading(startOfWeek(anchor), addDays(startOfWeek(anchor), 6))
         : view === 'plan'
-          ? 'Planning horizon'
+          ? formatPlanHeading(selectedDay, timezone)
           : fmtDayHeading(anchor)
 
   const todayKey = instantDayKey(now.toISOString(), timezone)
@@ -495,10 +492,16 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
     if ((view !== 'day' && view !== 'week') || !navigation.ready) return
     const controller = new AbortController()
     setWorkload([])
+    setGoogleStatus('loading')
     void fetch(`/api/admin/calendar/plan?from=${weekFrom}&to=${nextDateKey(weekFrom, 7)}&workload=1`, { headers: authHeaders(), signal: controller.signal })
       .then(response => response.ok ? response.json() : null)
-      .then(body => { if (!controller.signal.aborted) setWorkload(body?.connected ? body.days ?? [] : []) })
-      .catch(() => { /* Load unavailable remains visible. */ })
+      .then(body => {
+        if (controller.signal.aborted) return
+        const workload = weekWorkloadFromBody(body)
+        setGoogleStatus(workload.status)
+        setWorkload(workload.days as PlanData['days'])
+      })
+      .catch(() => { if (!controller.signal.aborted) setGoogleStatus('failed') })
     return () => controller.abort()
   }, [weekFrom, view, authHeaders, navigation.ready, appointments])
 
@@ -506,12 +509,16 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
     if (view !== 'plan') return
     let stale = false
     setPlanData(null)
-    void fetch(`/api/admin/calendar/plan?from=${encodeURIComponent(anchor.toISOString())}`, { headers: authHeaders() })
-      .then(response => response.ok ? response.json() : null)
-      .then(body => { if (!stale) setPlanData(body) })
-      .catch(() => { if (!stale) setPlanData(null) })
+    setPlanState('loading')
+    void fetch(`/api/admin/calendar/plan?from=${encodeURIComponent(`${selectedDay}T12:00:00.000Z`)}`, { headers: authHeaders() })
+      .then(response => {
+        if (!response.ok) throw new Error(String(response.status))
+        return response.json()
+      })
+      .then(body => { if (!stale) { setPlanData(body); setPlanState('ready') } })
+      .catch(() => { if (!stale) { setPlanData(null); setPlanState('error') } })
     return () => { stale = true }
-  }, [view, anchor, authHeaders])
+  }, [view, selectedDay, authHeaders])
 
   async function dismissAttention(id: string) {
     setAttention(items => items.filter(item => item.id !== id))
@@ -528,20 +535,18 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   }
 
   function beginReschedule(a: CalendarAppointment) {
-    const start = new Date(a.startTime)
     setReschedule({
       id: a.id,
       label: `${a.typeLabel} — ${a.attendeeName}`,
-      date: dayKey(start),
-      time: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+      date: instantDayKey(a.startTime, timezone),
+      time: zonedTimeInput(a.startTime, timezone),
     })
   }
 
   function openPlanBlock(deadline: PlanData['deadlines'][number]) {
-    const parsedDate = Number.isFinite(Date.parse(deadline.date)) ? new Date(deadline.date) : null
-    const fallbackDate = new Date(`${dayKey(selectedDate)}T09:00:00`)
-    const date = toDateInputValue(parsedDate ?? fallbackDate)
-    const time = toTimeInputValue(parsedDate ?? fallbackDate)
+    const parsed = Number.isFinite(Date.parse(deadline.date)) ? deadline.date : null
+    const date = parsed ? instantDayKey(parsed, timezone) : dayKey(selectedDate)
+    const time = parsed ? zonedTimeInput(parsed, timezone) : '09:00'
     const durationMinutes = parseIntOrNull(`${deadline.durationMinutes}`) ?? 30
 
     setPlanBlock({
@@ -557,12 +562,12 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
   async function createPlanBlock() {
     if (!planBlock) return
     const durationMinutes = parseIntOrNull(planBlock.durationMinutes)
-    const start = new Date(`${planBlock.date}T${planBlock.time}`)
+    const startMs = dateInstant(planBlock.date, timezone, planBlock.time)
     if (!durationMinutes) {
       toast.error('Block duration must be a positive number.')
       return
     }
-    if (!Number.isFinite(start.getTime())) {
+    if (!Number.isFinite(startMs)) {
       toast.error('Add a valid date and time for the block.')
       return
     }
@@ -572,7 +577,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
-          startAt: start.toISOString(),
+          startAt: new Date(startMs).toISOString(),
           durationMinutes,
           showAsBusy: planBlock.showAsBusy,
         }),
@@ -665,11 +670,11 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                           {a.attendeePhone ? ` · ${a.attendeePhone}` : ''}
                           {a.secondAttendeeEmail ? ` · +${a.secondAttendeeName || a.secondAttendeeEmail}` : ''}
                           {a.locationType ? ` · ${LOCATION_LABEL[a.locationType]}` : ''}
-                          <span
-                            className={cn('ml-1 inline-block rounded-full px-1.5 py-0.5', availabilityClass(a))}
-                          >
-                            {availabilityLabel(a)}
-                          </span>
+                          {exceptionLabel(a) && (
+                            <span className={cn('ml-1 inline-block rounded-full px-1.5 py-0.5', a.calendarShowAsBusy === false && a.status === 'scheduled' ? 'bg-green-bg text-green' : 'bg-muted text-muted-foreground')}>
+                              {exceptionLabel(a)}
+                            </span>
+                          )}
                           {isExternallyManagedSource(a.source) && (
                             <span className="ml-2 text-primary">{externalSourceLabel(a.source)}</span>
                           )}
@@ -762,13 +767,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                                   size="sm"
                                   variant="outline"
                                   onClick={() => {
-                                    const start = new Date(a.startTime)
-                                    setReschedule({
-                                      id: a.id,
-                                      label: `${a.typeLabel} — ${a.attendeeName}`,
-                                      date: dayKey(start),
-                                      time: `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
-                                    })
+                    beginReschedule(a)
                                   }}
                                 >
                                   Reschedule
@@ -859,8 +858,8 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
             authHeaders={authHeaders}
             onBooked={() => void load()}
           />
-          <Button asChild variant="ghost" size="sm" title="Scheduling settings">
-            <Link href="/admin/settings?tab=scheduling">
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/settings?tab=scheduling" aria-label="Scheduling settings">
               <Settings className="h-4 w-4" />
             </Link>
           </Button>
@@ -869,7 +868,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
 
       <div
         className={cn(
-          'flex-wrap items-center gap-3 text-micro text-foreground',
+          'items-center gap-2 overflow-x-auto text-micro text-foreground',
           // Month, week and day all colour events by category, so all three
           // need the key. Only the plan view has no coloured events.
           view !== 'plan' ? 'flex' : 'hidden',
@@ -882,12 +881,12 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
             : appointments.filter(item => item.status === 'scheduled' && categorize(item.typeLabel) === category).length + calendarEvents.filter(item => !isBlock(item) && categorize(item.subject) === category).length
           const style = category === 'blocked' ? null : CATEGORY_STYLE[category as keyof typeof CATEGORY_STYLE]
           return <button key={category} type="button" aria-pressed={!hidden} onClick={() => toggleCategory(category)}
-            className={cn('rounded-full border border-border px-2.5 py-1 text-xs', hidden && 'line-through')}
+            className={cn('shrink-0 rounded-full border border-border px-2.5 py-1 text-xs', hidden && 'line-through')}
             style={hidden ? undefined : { background: style?.bg, color: style?.text, backgroundImage: category === 'blocked' ? BLOCK_HATCH : undefined }}>
             {label} · {count}
           </button>
         })}
-        <span className="ml-auto text-xs text-muted-foreground">{appointments.filter(item => item.status === 'scheduled').length} appointments · {calendarEvents.filter(item => !isBlock(item)).length} calendar events · total in range</span>
+        <span className="ml-auto shrink-0 text-xs text-muted-foreground">{appointments.filter(item => item.status === 'scheduled').length} appointments · {calendarEvents.filter(item => !isBlock(item)).length} calendar events · {view === 'month' ? 'this month' : 'this week'}</span>
       </div>
 
       {loading && <p className="text-xs text-muted-foreground" role="status">Loading calendar…</p>}
@@ -904,6 +903,8 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
               onEventClick={setSelectedAppointment}
             />
           ) : view === 'week' ? (
+            <div className="space-y-2">
+            <WorkloadNote status={googleStatus} />
             <TimeGrid
               days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i))}
               byDay={visibleByDay}
@@ -918,9 +919,11 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
               onSlotClick={(date, time) => openQuickBook({ date, time })}
               onEventClick={setSelectedAppointment}
             />
+            </div>
           ) : view === 'day' ? (
             <div className="space-y-3">
             <WeekStrip days={Array.from({ length: 7 }, (_, i) => { const date = nextDateKey(weekFrom, i); return workload.find(day => day.date === date) ?? { date, clientMinutes: 0, internalMinutes: 0, targetMinutes: NaN, isToday: date === todayKey } })} selectedDay={selectedDay} todayKey={todayKey} counts={new Map([...byDay].map(([key, rows]) => [key, rows.filter(a => a.status === 'scheduled').length]))} onSelect={setSelectedDay} />
+            <WorkloadNote status={googleStatus} />
             <DayAgenda
               now={now} todayKey={todayKey} timezone={timezone} availability={availability} attentionUnavailable={attentionUnavailable}
               conflictAppointments={selectedAppointments} conflictCalendarEvents={selectedCalendarEvents}
@@ -940,6 +943,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
           ) : (
               <PlanView
                 data={planData}
+                error={planState === 'error'}
                 onBook={openPlanBlock}
                 onAskAssistant={prompt => window.dispatchEvent(new CustomEvent('cornerstone:chat-open', { detail: { prompt } }))}
               />
@@ -1042,6 +1046,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
         open={selectedAppointment !== null}
         onOpenChange={open => !open && setSelectedAppointment(null)}
         authHeaders={authHeaders}
+        timezone={timezone}
         onReschedule={beginReschedule}
         onAppointmentChanged={updated => {
           setSelectedAppointment(current => (current?.id === updated.id ? updated : current))
@@ -1094,8 +1099,8 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                 <Button
                   disabled={acting}
                   onClick={() => {
-                    const start = new Date(`${reschedule.date}T${reschedule.time}`)
-                    if (!Number.isFinite(start.getTime())) {
+                    const startMs = dateInstant(reschedule.date, timezone, reschedule.time)
+                    if (!Number.isFinite(startMs)) {
                       toast.error('Invalid date or time')
                       return
                     }
@@ -1103,7 +1108,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                       {
                         appointmentId: reschedule.id,
                         action: 'reschedule',
-                        newStartIso: start.toISOString(),
+                        newStartIso: new Date(startMs).toISOString(),
                       },
                       'Appointment rescheduled — client notified',
                     ).then(ok => ok && setReschedule(null))
@@ -1118,6 +1123,13 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
       </Dialog>
     </div>
   )
+}
+
+function WorkloadNote({ status }: { status: 'loading' | 'included' | 'unavailable' | 'partial' | 'failed' }) {
+  if (status === 'unavailable') return <p className="text-xs text-muted-foreground">Load counts Cornerstone appointments. Google Calendar is not included.</p>
+  if (status === 'partial') return <p className="text-xs text-muted-foreground">Load is hidden because Google Calendar returned a partial result.</p>
+  if (status === 'failed') return <p className="text-xs text-muted-foreground" role="alert">Could not load workload.</p>
+  return null
 }
 
 function MonthGrid(props: {
@@ -1191,7 +1203,6 @@ function MonthGrid(props: {
                 </span>
               )}
               {shown.map(a => {
-                const style = CATEGORY_STYLE[categorize(a.typeLabel)]
                 return (
                   <button
                     key={a.id}
@@ -1202,24 +1213,14 @@ function MonthGrid(props: {
                     }}
                     className={cn(
                       'truncate rounded px-1 py-0.5 text-left text-micro leading-4',
-                      a.status === 'cancelled' && 'bg-muted text-muted-foreground line-through',
+                      a.status !== 'scheduled' && 'bg-muted text-muted-foreground',
+                      a.status === 'cancelled' && 'line-through',
                     )}
-                    style={
-                      a.status === 'cancelled'
-                        ? undefined
-                        : { background: style.bg, color: style.text, borderLeft: `3px solid ${style.dot}` }
-                    }
+                    style={monthChipStyle(a.status, CATEGORY_STYLE[categorize(a.typeLabel)])}
                     title={`${fmtTime(a.startTime)} ${a.typeLabel} — ${a.attendeeName}`}
                   >
-                    {fmtTime(a.startTime)} {a.attendeeName}{' '}
-                    <span
-                      className={cn(
-                        'inline-block rounded-full px-1.5 py-0.5 text-micro',
-                        availabilityClass(a),
-                      )}
-                    >
-                      {availabilityLabel(a)}
-                    </span>
+                    {fmtTime(a.startTime)} {a.attendeeName}
+                    {exceptionLabel(a) ? ` · ${exceptionLabel(a)}` : ''}
                   </button>
                 )
               })}
