@@ -53,7 +53,6 @@ select
   ci.created_at,
   ci.updated_at,
   la.last_activity_at,
-  la.last_activity_type,
   public.lead_scoring_appointment_at(m.discovery_call_at, m.pmps_at) as next_appointment_at,
   -- Ordering by name has to agree with leadDisplayName(): full name, else the
   -- first and last together, else the email.
@@ -102,7 +101,9 @@ select
   -- filters they would quietly exclude the leads they are meant to return.
   coalesce(ci.intake_completed_at is not null or ci.status = 'completed', false) as intake_complete,
   (ci.engagement_sent_at is not null
-    and coalesce(ci.engagement_status, '') <> 'signed') as engagement_pending
+    and coalesce(ci.engagement_status, '') <> 'signed') as engagement_pending,
+  -- Appended so CREATE OR REPLACE can add the column without renaming the ones after it.
+  la.last_activity_type
 from public.client_intake ci
 left join public.matters m on m.id = ci.matter_id
 left join latest_activity la on la.lead_id = ci.id
