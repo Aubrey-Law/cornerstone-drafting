@@ -126,6 +126,86 @@ type RecordOnlyDocumentKey = keyof typeof RECORD_ONLY_DOCUMENT_LABELS
 type FundingDocumentKey = keyof typeof FUNDING_DOCUMENT_LABELS
 type StandaloneAncillaryDocumentKey = keyof typeof ANCILLARY_DOCUMENT_LABELS
 
+export function PlanTypeBlock({ sheet, onChange }: SectionProps) {
+  const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
+
+  const handlePlanTypeSelect = (value: string) => {
+    const nextPlanType = value as DesignPlanType
+    onChange('plan_type', () => nextPlanType)
+
+    if (planTypeDisallowsRevocableTrustDocument(nextPlanType)) {
+      onChange('decisions', prevSheet => {
+        const inclusionsForPlan = getDocumentInclusions({ ...prevSheet, plan_type: value })
+        if (!inclusionsForPlan.trust) return prevSheet.decisions ?? {}
+        return mergeDecisionUpdates(prevSheet,
+          current => setDocumentInclusion(current, 'trust', false),
+          current => setEstatePlanDesignSetup(current, { trust: false, will_title: 'last_will' }),
+        )
+      })
+      return
+    }
+
+    if (designPlanTypeIncludesRevocableTrust(nextPlanType)) {
+      onChange('decisions', prevSheet => {
+        const inclusionsForPlan = getDocumentInclusions({ ...prevSheet, plan_type: value })
+        if (inclusionsForPlan.trust) return prevSheet.decisions ?? {}
+        return mergeDecisionUpdates(prevSheet,
+          current => setDocumentInclusion(current, 'trust', true),
+          current => setEstatePlanDesignSetup(current, { trust: true, will_title: 'pour_over_will' }),
+        )
+      })
+    }
+  }
+
+  return (
+    <SectionBlock title="Plan Type">
+      <DecisionRow
+        question="Plan type"
+        help="Choose the structure that controls the document package and downstream drafting choices."
+        fieldName="plan_type"
+        blocking
+        options={DESIGN_PLAN_TYPE_OPTIONS.map((opt) => ({
+          value: opt.value,
+          label: opt.label,
+        }))}
+        value={normalizedPlanType}
+        onChange={handlePlanTypeSelect}
+      />
+    </SectionBlock>
+  )
+}
+
+export function AssetTransferDocumentsFields({ sheet, onChange }: SectionProps) {
+  const selectedAssetTransferDocs = useMemo(
+    () => new Set(getPersistedRealEstateTransfer(sheet).selectedDocs),
+    [sheet],
+  )
+
+  const updateAssetTransferDoc = (docType: RealEstateTransferDocType, checked: boolean) => {
+    const next = new Set(selectedAssetTransferDocs)
+    if (checked) next.add(docType)
+    else next.delete(docType)
+    onChange('decisions', prevSheet => setSelectedAssetTransferDocs(prevSheet, Array.from(next)))
+  }
+
+  return (
+    <div className="space-y-3">
+      {REAL_ESTATE_TRANSFER_DOC_TYPES.map(docType => (
+        <label
+          key={docType}
+          className="flex items-start gap-3 rounded-md border border-border bg-muted px-3 py-2.5"
+        >
+          <Checkbox
+            checked={selectedAssetTransferDocs.has(docType)}
+            onCheckedChange={value => updateAssetTransferDoc(docType, value === true)}
+          />
+          <span className="text-sm text-foreground">{DOCUMENT_TYPES[docType].label}</span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
 function ApplicableDecision({
   applicable,
   showInapplicable,
@@ -192,34 +272,6 @@ export function PlanDesignSection({
     updateDecisions(current => setEstatePlanDesignSetup(current, patch))
   }
 
-  const handlePlanTypeSelect = (value: string) => {
-    const nextPlanType = value as DesignPlanType
-    onChange('plan_type', () => nextPlanType)
-
-    if (planTypeDisallowsRevocableTrustDocument(nextPlanType)) {
-      onChange('decisions', prevSheet => {
-        const inclusionsForPlan = getDocumentInclusions({ ...prevSheet, plan_type: value })
-        if (!inclusionsForPlan.trust) return prevSheet.decisions ?? {}
-        return mergeDecisionUpdates(prevSheet,
-          current => setDocumentInclusion(current, 'trust', false),
-          current => setEstatePlanDesignSetup(current, { trust: false, will_title: 'last_will' }),
-        )
-      })
-      return
-    }
-
-    if (designPlanTypeIncludesRevocableTrust(nextPlanType)) {
-      onChange('decisions', prevSheet => {
-        const inclusionsForPlan = getDocumentInclusions({ ...prevSheet, plan_type: value })
-        if (inclusionsForPlan.trust) return prevSheet.decisions ?? {}
-        return mergeDecisionUpdates(prevSheet,
-          current => setDocumentInclusion(current, 'trust', true),
-          current => setEstatePlanDesignSetup(current, { trust: true, will_title: 'pour_over_will' }),
-        )
-      })
-    }
-  }
-
   const updateCoreDocument = (
     key: 'trust' | 'will' | 'power_of_attorney' | 'health_care_proxy' | 'hipaa_authorization' | 'living_will',
     checked: boolean,
@@ -274,18 +326,6 @@ export function PlanDesignSection({
     })
   }
 
-  const selectedAssetTransferDocs = useMemo(
-    () => new Set(getPersistedRealEstateTransfer(sheet).selectedDocs),
-    [sheet],
-  )
-
-  const updateAssetTransferDoc = (docType: RealEstateTransferDocType, checked: boolean) => {
-    const next = new Set(selectedAssetTransferDocs)
-    if (checked) next.add(docType)
-    else next.delete(docType)
-    onChange('decisions', prevSheet => setSelectedAssetTransferDocs(prevSheet, Array.from(next)))
-  }
-
   const trustCheckboxDisabled = planTypeDisallowsRevocableTrustDocument(normalizedPlanType)
   const revocableTrustDecisionApplies = normalizedPlanType == null
     || designPlanTypeIncludesRevocableTrust(normalizedPlanType)
@@ -298,20 +338,7 @@ export function PlanDesignSection({
 
       <PlanTrackNotice matterId={matterId} practiceArea={practiceArea} />
 
-      <SectionBlock title="Plan Type">
-        <DecisionRow
-          question="Plan type"
-          help="Choose the structure that controls the document package and downstream drafting choices."
-          fieldName="plan_type"
-          blocking
-          options={DESIGN_PLAN_TYPE_OPTIONS.map((opt) => ({
-            value: opt.value,
-            label: opt.label,
-          }))}
-          value={normalizedPlanType}
-          onChange={handlePlanTypeSelect}
-        />
-      </SectionBlock>
+      <PlanTypeBlock sheet={sheet} onChange={onChange} />
 
       <SectionBlock title="Documents Included">
         {needsDistributionMethod && (
@@ -493,20 +520,7 @@ export function PlanDesignSection({
             <p className="mb-3 text-xs text-muted-foreground">
               Selected documents are generated with the estate plan. Transfers &amp; Assignments only shows fields needed for the checked documents.
             </p>
-            <div className="space-y-3">
-              {REAL_ESTATE_TRANSFER_DOC_TYPES.map(docType => (
-                <label
-                  key={docType}
-                  className="flex items-start gap-3 rounded-md border border-border bg-muted px-3 py-2.5"
-                >
-                  <Checkbox
-                    checked={selectedAssetTransferDocs.has(docType)}
-                    onCheckedChange={value => updateAssetTransferDoc(docType, value === true)}
-                  />
-                  <span className="text-sm text-foreground">{DOCUMENT_TYPES[docType].label}</span>
-                </label>
-              ))}
-            </div>
+            <AssetTransferDocumentsFields sheet={sheet} onChange={onChange} />
           </div>
 
           <PlanStructureFactsSection sheet={sheet} onChange={onChange} />

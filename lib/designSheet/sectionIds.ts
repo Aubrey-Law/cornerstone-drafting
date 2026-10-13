@@ -14,6 +14,7 @@ export const DESIGN_SECTION_IDS = {
   assetSchedules: 'asset-schedules',
   transfersAssignments: 'transfers-assignments',
   attorneyNotes: 'attorney-notes',
+  essentialEstatePlan: 'essential-estate-plan',
 } as const
 
 export type DesignSectionId = typeof DESIGN_SECTION_IDS[keyof typeof DESIGN_SECTION_IDS]
@@ -30,6 +31,7 @@ export const DESIGN_SHEET_GROUP_IDS = {
   realProperty: 'real-property',
   notes: 'notes',
   review: 'review',
+  essentialPlan: 'essential-plan',
 } as const
 
 export type DesignSheetGroupId = typeof DESIGN_SHEET_GROUP_IDS[keyof typeof DESIGN_SHEET_GROUP_IDS]
@@ -62,6 +64,7 @@ const DESIGN_SECTION_GROUPS: Record<DesignSectionId, DesignSheetGroupId> = {
   [DESIGN_SECTION_IDS.healthcareDirectives]: DESIGN_SHEET_GROUP_IDS.healthcare,
   [DESIGN_SECTION_IDS.transfersAssignments]: DESIGN_SHEET_GROUP_IDS.realProperty,
   [DESIGN_SECTION_IDS.attorneyNotes]: DESIGN_SHEET_GROUP_IDS.notes,
+  [DESIGN_SECTION_IDS.essentialEstatePlan]: DESIGN_SHEET_GROUP_IDS.essentialPlan,
 }
 
 export function designSectionAnchorId(sectionId: string | null | undefined): DesignSheetGroupId | null {

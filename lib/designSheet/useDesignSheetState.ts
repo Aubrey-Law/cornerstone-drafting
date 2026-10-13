@@ -12,6 +12,7 @@ import {
   type DesignReadinessBlocker,
   type DesignSectionSummary,
 } from '@/lib/designSheetReadiness'
+import { resolveDesignSheetLayout } from '@/lib/designSheet/sheetLayout'
 import { saveLiDesignSheet, updatePlanCoverage } from '@/app/admin/drafting/[matterId]/design/actions'
 import type { DesignSheet, MatterContact, PipelineMatter } from '@/types/database'
 import type { DesignSheetImportProposal } from '@/lib/designSheetImport/shared'
@@ -218,6 +219,7 @@ export function useDesignSheetState({
     matter,
     isLP,
     lpData: lpDataState,
+    layout: resolveDesignSheetLayout({ practiceArea: matter.practice_area, sheet: readinessSheet }),
   }), [isLP, lpDataState, matter, readinessSheet])
   const documentInclusions = readiness.documentInclusions
 

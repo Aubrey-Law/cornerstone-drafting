@@ -12,6 +12,7 @@ import {
 } from '@/lib/designPlanType'
 import { getDesignPlanTrack, type DesignPlanTrack } from '@/lib/collegePrepDesign'
 import { normalizePracticeArea } from '@/lib/practiceArea'
+import { resolveDesignSheetLayout, type DesignSheetLayout } from '@/lib/designSheet/sheetLayout'
 import {
   DESIGN_SHEET_GROUP_IDS,
   DESIGN_SECTION_IDS,
@@ -41,6 +42,7 @@ import {
   WillDocumentSection,
 } from './sections/DocumentSections'
 import { TransfersAssignmentsSection } from './sections/TransfersAssignmentsSection'
+import { EssentialEstatePlanDesignSection } from './sections/EssentialEstatePlanDesignSection'
 
 export interface DesignSectionDef {
   id: string
@@ -68,6 +70,16 @@ export interface DesignSheetGroupDef {
  * because there is nothing to switch on, and an estate plan has no
  * college-prep tab.
  */
+const ESSENTIAL_SHEET_GROUPS: Array<{
+  id: DesignSheetGroupId
+  title: string
+  subtitle: string
+}> = [
+  { id: DESIGN_SHEET_GROUP_IDS.facts, title: 'Intake Details', subtitle: 'Client, spouse, children, and the facts the plan is built on' },
+  { id: DESIGN_SHEET_GROUP_IDS.fiduciaries, title: 'Fiduciaries', subtitle: 'Trustees, personal representatives, agents, and guardians' },
+  { id: DESIGN_SHEET_GROUP_IDS.essentialPlan, title: 'Estate Plan Design', subtitle: 'Plan type, beneficiaries, trust, powers, and signing' },
+]
+
 const DESIGN_SHEET_GROUP_CATALOG: Array<{
   id: DesignSheetGroupId
   title: string
@@ -89,8 +101,12 @@ const DESIGN_SHEET_GROUP_CATALOG: Array<{
 export function buildDesignSheetGroups(
   sections: DesignSectionDef[],
   planTrack: DesignPlanTrack = 'estate',
+  layout: DesignSheetLayout = planTrack === 'college_prep' ? 'college_prep' : 'full',
 ): DesignSheetGroupDef[] {
-  return DESIGN_SHEET_GROUP_CATALOG.filter(group => group.tracks.includes(planTrack)).map(({ tracks: _tracks, ...group }) => {
+  const catalog = layout === 'essential'
+    ? ESSENTIAL_SHEET_GROUPS
+    : DESIGN_SHEET_GROUP_CATALOG.filter(group => group.tracks.includes(planTrack)).map(({ tracks: _tracks, ...group }) => group)
+  return catalog.map(group => {
     const groupSections = sections.filter(section => designSectionAnchorId(section.id) === group.id)
     return {
       ...group,
@@ -179,6 +195,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
   // The plan track follows the matter's practice area; the sheet marker is kept
   // in step by reconcilePlanTrackDecisions, so either source agrees here.
   const practiceArea = normalizePracticeArea(matter.practice_area)
+  const layout = resolveDesignSheetLayout({ practiceArea: matter.practice_area, sheet })
 
   const navArgs = {
     intakeSnapshot,
@@ -188,6 +205,7 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
     isJointTrust: sheet.is_joint,
     planType: sheet.plan_type,
     planTrack: getDesignPlanTrack(sheet),
+    layout,
   }
   const navItems = (showInapplicable === undefined
     ? getDesignSectionNavItems(navArgs)
@@ -234,6 +252,13 @@ export function buildDesignSectionDefs(args: BuildDesignSectionsArgs): DesignSec
         {...common}
         matterId={matterId}
         practiceArea={practiceArea}
+        showInapplicable={Boolean(showInapplicable)}
+      />
+    ),
+    [DESIGN_SECTION_IDS.essentialEstatePlan]: () => (
+      <EssentialEstatePlanDesignSection
+        {...common}
+        matter={matter}
         showInapplicable={Boolean(showInapplicable)}
       />
     ),

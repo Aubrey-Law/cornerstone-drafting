@@ -168,11 +168,12 @@ describe('sectioned design sheet page wiring', () => {
 
   it('keeps the hash contract and seeds the active group from the URL', () => {
     expect(page).toContain("window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${groupId}`)")
-    expect(page).toContain("resolveDesignSheetGroupId(window.location.hash.replace(/^#/, ''))")
+    expect(page).toContain("designGroupForLayout(")
+    expect(page).toContain("window.location.hash.replace(/^#/, '')")
   })
 
   it('falls back to the first visible group when the active one is hidden', () => {
-    expect(page).toContain('if (activeGroupId && navGroups.some(group => group.id === activeGroupId)) return activeGroupId')
+    expect(page).toContain('if (layoutAwareActiveId && navGroups.some(group => group.id === layoutAwareActiveId)) return layoutAwareActiveId')
     expect(page).toContain('return navGroups[0]?.id ?? REVIEW_GROUP.id')
   })
 

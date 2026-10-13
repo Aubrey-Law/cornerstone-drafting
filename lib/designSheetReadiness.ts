@@ -9,6 +9,7 @@ import { sheetHasMinorChildren } from '@/lib/designSheet/minorChildren'
 import { resolveResidualBeneficiaryMethod } from '@/lib/designSheetTrustDetails'
 import { normalizeDesignPlanType } from '@/lib/designPlanType'
 import { collegePrepDraftingBlockers, isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
+import { essentialSheetShowsReadinessField, type DesignSheetLayout } from '@/lib/designSheet/sheetLayout'
 import { DESIGN_SECTION_IDS, normalizeDesignSectionId } from '@/lib/designSheet/sectionIds'
 import type { DesignSheet, PipelineMatter } from '@/types/database'
 
@@ -44,6 +45,8 @@ interface ComputeDesignSheetReadinessArgs {
   matter: Pick<PipelineMatter, 'has_minor_children'>
   isLP: boolean
   lpData: LpDataShape | null
+  /** Essential Estate Plan Design drops blockers for decisions it does not show. */
+  layout?: DesignSheetLayout
 }
 
 export interface DesignSheetReadiness {
@@ -218,6 +221,7 @@ export function computeDesignSheetReadiness({
   matter,
   isLP,
   lpData,
+  layout = 'full',
 }: ComputeDesignSheetReadinessArgs): DesignSheetReadiness {
   const documentInclusions = getDocumentInclusions(sheet)
   const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
@@ -382,6 +386,12 @@ export function computeDesignSheetReadiness({
         blocker(DESIGN_SECTION_IDS.collegePlan, item.label, item.field))
     : []
 
+  const visibleOnLayout = (items: DesignReadinessBlocker[]) => (
+    layout === 'essential'
+      ? items.filter(item => essentialSheetShowsReadinessField(item.targetField))
+      : items
+  )
+
   const fiduciaryBlockers = [
     ...clientTrustBlockers,
     ...willBlockers,
@@ -439,13 +449,13 @@ export function computeDesignSheetReadiness({
       ])),
     [DESIGN_SECTION_IDS.willDetails]: !documentInclusions.will
       ? { status: 'none', detail: 'not included' }
-      : summaryFromBlockers([...provisionBlockers(willBlockers), ...residuaryBlockers], 'ready'),
+      : summaryFromBlockers(visibleOnLayout([...provisionBlockers(willBlockers), ...residuaryBlockers]), 'ready'),
     [DESIGN_SECTION_IDS.financialPoa]: !documentInclusions.dpoa
       ? { status: 'none', detail: 'not included' }
-      : summaryFromBlockers(provisionBlockers(dpoaBlockers), 'ready'),
+      : summaryFromBlockers(visibleOnLayout(provisionBlockers(dpoaBlockers)), 'ready'),
     [DESIGN_SECTION_IDS.healthcareDirectives]: !documentInclusions.healthcare
       ? { status: 'none', detail: 'not included' }
-      : summaryFromBlockers(provisionBlockers(healthcareBlockers), 'ready'),
+      : summaryFromBlockers(visibleOnLayout(provisionBlockers(healthcareBlockers)), 'ready'),
     [DESIGN_SECTION_IDS.assetSchedules]: optionalSummary(assetsFilled, `${assetList.length} asset${assetList.length === 1 ? '' : 's'}`),
     [DESIGN_SECTION_IDS.collegePlan]: summaryFromBlockers(collegePrepBlockers, 'ready'),
   }

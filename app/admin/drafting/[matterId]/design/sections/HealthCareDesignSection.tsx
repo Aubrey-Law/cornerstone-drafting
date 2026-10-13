@@ -47,12 +47,14 @@ function ClauseLibraryActions() {
 
 function AnatomicalGiftBlock({
   title,
+  fieldName,
   preference,
   restrictions,
   onPreferenceChange,
   onRestrictionsChange,
 }: {
   title: string
+  fieldName?: string
   preference: AnatomicalGiftPreference | null
   restrictions: string | null
   onPreferenceChange: (value: AnatomicalGiftPreference) => void
@@ -65,6 +67,7 @@ function AnatomicalGiftBlock({
     <SectionBlock title={title}>
       <DecisionRow
         question="Anatomical gift preference"
+        fieldName={fieldName}
         blocking
         value={preference}
         options={[
@@ -340,7 +343,7 @@ function HealthCareWishesBlock({ title, party, provisions, update }: {
   )
 }
 
-export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
+export function HealthCareDesignSection(props: HealthCareDesignSectionProps & { scope?: 'full' | 'essential' }) {
   const { sheet, onChange, contacts, matter } = props
   const inclusions = getDocumentInclusions(sheet)
   const provisions = getDesignSheetHealthcareProvisions(sheet)
@@ -365,6 +368,51 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
     if (current.has(contactId)) current.delete(contactId)
     else current.add(contactId)
     updateProvisions({ [key]: Array.from(current) })
+  }
+
+  if (props.scope === 'essential') {
+    return (
+      <>
+        <AnatomicalGiftBlock
+          title="Anatomical gift preference"
+          fieldName="healthcare_provisions.client_anatomical_gift"
+          preference={provisions.client_anatomical_gift}
+          restrictions={provisions.client_anatomical_restrictions}
+          onPreferenceChange={value => {
+            updateProvisions({ client_anatomical_gift: value })
+            const legacy = anatomicalGiftToLegacy(value)
+            if (legacy) onChange('hcp_anatomical_gift', legacy)
+          }}
+          onRestrictionsChange={value => {
+            updateProvisions({ client_anatomical_restrictions: value })
+            onChange('hcp_anatomical_specified', value)
+          }}
+        />
+        {spouseDocs && (
+          <AnatomicalGiftBlock
+            title={`${spouseFirst || 'Spouse'}'s anatomical gift preference`}
+            fieldName="healthcare_provisions.spouse_anatomical_gift"
+            preference={provisions.spouse_anatomical_gift}
+            restrictions={provisions.spouse_anatomical_restrictions}
+            onPreferenceChange={value => updateProvisions({ spouse_anatomical_gift: value })}
+            onRestrictionsChange={value => updateProvisions({ spouse_anatomical_restrictions: value })}
+          />
+        )}
+        <SectionBlock title="HIPAA fiduciary scope">
+          <DecisionRow
+            question="HIPAA fiduciary scope"
+            help="Controls whether trustees, POA agents, and healthcare agents are listed by name, or whether only general language is used."
+            fieldName="healthcare_provisions.hipaa_list_fiduciaries_by_name"
+            value={provisions.hipaa_list_fiduciaries_by_name}
+            options={[
+              { value: 'by_name', label: 'List fiduciaries by name' },
+              { value: 'general_language', label: 'Use general language only' },
+            ]}
+            onChange={value => updateProvisions({ hipaa_list_fiduciaries_by_name: value })}
+          />
+        </SectionBlock>
+      </>
+    )
   }
 
   if (!inclusions.healthcare) return null
@@ -404,6 +452,7 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
     <div>
       <AnatomicalGiftBlock
         title={`${clientFirst || 'Client'}'s Anatomical gifts preference`}
+        fieldName="healthcare_provisions.client_anatomical_gift"
         preference={provisions.client_anatomical_gift}
         restrictions={provisions.client_anatomical_restrictions}
         onPreferenceChange={value => {
@@ -424,6 +473,7 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
         <>
           <AnatomicalGiftBlock
             title={`${spouseFirst || 'Spouse'}'s Anatomical gifts preference`}
+            fieldName="healthcare_provisions.spouse_anatomical_gift"
             preference={provisions.spouse_anatomical_gift}
             restrictions={provisions.spouse_anatomical_restrictions}
             onPreferenceChange={value => updateProvisions({ spouse_anatomical_gift: value })}
@@ -455,6 +505,7 @@ export function HealthCareDesignSection(props: HealthCareDesignSectionProps) {
           <DecisionRow
             question="HIPAA fiduciary scope"
             help="Controls whether trustees, POA agents, and healthcare agents are listed by name, or whether only general language is used."
+            fieldName="healthcare_provisions.hipaa_list_fiduciaries_by_name"
             value={provisions.hipaa_list_fiduciaries_by_name}
             options={[
               { value: 'by_name', label: 'List fiduciaries by name' },

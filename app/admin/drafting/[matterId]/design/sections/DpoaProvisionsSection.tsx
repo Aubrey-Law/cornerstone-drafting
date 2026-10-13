@@ -28,7 +28,11 @@ import {
   type SectionProps,
 } from './shared'
 
-export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
+export function DpoaProvisionsSection({
+  sheet,
+  onChange,
+  onlyCoagent = false,
+}: SectionProps & { onlyCoagent?: boolean }) {
   const provisions = getDesignSheetDpoaProvisions(sheet)
   const clientFirst = (sheet.client_name ?? '').trim().split(/\s+/)[0] || '[Settlor]'
 
@@ -43,6 +47,37 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
   const updateCoagentServing = (serving: DpoaCoagentServing) => {
     onChange('dpoa_coagent_manner', coagentMannerFromServing(serving))
     updateProvisions({ coagent_serving: serving })
+  }
+
+  const coagentDecision = (
+    <>
+      <DecisionRow
+        question="Co-agent decision-making"
+        fieldName="dpoa_provisions.coagent_serving"
+        blocking
+        value={provisions.coagent_serving}
+        options={[
+          { value: 'jointly', label: 'Co-agents must act jointly', description: 'All decisions require the unanimous agreement of all then-acting co-agents.' },
+          { value: 'separately', label: 'Co-agents may act separately', description: 'Each co-agent may act independently without the consent of any other co-agent.' },
+          { value: 'silent', label: 'Do not include', description: 'The document will be silent on co-agent decision-making.' },
+        ]}
+        onChange={updateCoagentServing}
+      />
+      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+        Note: This form allows you to designate co-agents. However, banks may not accept co-agents as a matter of policy.
+      </p>
+    </>
+  )
+
+  if (onlyCoagent) {
+    return (
+      <SectionBlock
+        title="Co-agent decision-making"
+        subtitle="If multiple people are serving, select how they should make decisions."
+      >
+        {coagentDecision}
+      </SectionBlock>
+    )
   }
 
   const updateCompensation = (value: DpoaAgentCompensation) => {
@@ -114,21 +149,7 @@ export function DpoaProvisionsSection({ sheet, onChange }: SectionProps) {
         title="Should co-agents serve jointly, separately, or should the document be silent?"
         subtitle="If multiple people are serving, select how they should make decisions."
       >
-        <DecisionRow
-          question="Co-agent decision-making"
-          fieldName="dpoa_provisions.coagent_serving"
-          blocking
-          value={provisions.coagent_serving}
-          options={[
-            { value: 'jointly', label: 'Co-agents must act jointly', description: 'All decisions require the unanimous agreement of all then-acting co-agents.' },
-            { value: 'separately', label: 'Co-agents may act separately', description: 'Each co-agent may act independently without the consent of any other co-agent.' },
-            { value: 'silent', label: 'Do not include', description: 'The document will be silent on co-agent decision-making.' },
-          ]}
-          onChange={updateCoagentServing}
-        />
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          Note: This form allows you to designate co-agents. However, banks may not accept co-agents as a matter of policy.
-        </p>
+        {coagentDecision}
       </SectionBlock>
 
       <SectionBlock title="When the Power of Attorney Takes Effect">

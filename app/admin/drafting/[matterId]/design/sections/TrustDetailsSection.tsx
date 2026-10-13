@@ -78,6 +78,8 @@ interface DocumentSectionProps extends SectionProps {
   matter: PipelineMatter
   onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
+  /** Essential Estate Plan Design keeps joint trust, name, bequests, pets, residuary, and remote beneficiaries. */
+  variant?: 'full' | 'essential'
 }
 
 const YES_NO = [
@@ -209,6 +211,7 @@ const TRUSTEE_INCAPACITY_DETERMINER_OPTIONS = [
 
 export function TrustDetailsSection(props: DocumentSectionProps) {
   const { sheet, onChange, contacts, matter } = props
+  const essential = props.variant === 'essential'
   const { onAddContact, onUpdateContact } = props
   const original = (field: string) => sheet.overrides?.[field]?.original
   const derivedTrustName = deriveTrustName(sheet, matter)
@@ -296,9 +299,11 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
 
   return (
     <DesignSectionContent>
-      <SectionHelp>Configure the trust structure, name, protector, trustees, and how the residuary is distributed.</SectionHelp>
+      {!essential && (
+        <SectionHelp>Configure the trust structure, name, protector, trustees, and how the residuary is distributed.</SectionHelp>
+      )}
 
-      <SectionBlock title="Trust Structure">
+      <SectionBlock title={essential ? 'Joint Trust' : 'Trust Structure'}>
         <DecisionRow
           question="Joint or separate trusts?"
           help="Choose whether the spouses share one trust or use separate trusts."
@@ -311,7 +316,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           ]}
           onChange={v => onChange('is_joint', v === 'yes')}
         />
-        {married && !sheet.is_joint && (
+        {!essential && married && !sheet.is_joint && (
           <DecisionRow
             question="Spousal Trust Funding"
             help="Choose how the surviving spouse receives or holds the residuary estate."
@@ -322,8 +327,8 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
         )}
       </SectionBlock>
 
-      {jointTrust && <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="joint" />}
-      {spouseTrustsFromResiduary && (
+      {!essential && jointTrust && <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="joint" />}
+      {!essential && spouseTrustsFromResiduary && (
         <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="separate" />
       )}
 
@@ -361,6 +366,8 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
         )}
       </SectionBlock>
 
+      {!essential && (
+      <>
       <SectionBlock title="Restatement">
         <DecisionRow
           question="Restatement"
@@ -602,6 +609,8 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           />
         </div>
       </SectionBlock>
+      </>
+      )}
 
       <TrustBeneficiariesSection
         sheet={sheet}
@@ -612,6 +621,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
         specificBequestsOnly
       />
 
+      {!essential && (
       <SectionBlock title="Tangible Personal Property">
         <DecisionRow
           question="Distribution of tangible property"
@@ -636,6 +646,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           )}
         </div>
       </SectionBlock>
+      )}
 
       <SectionBlock title="Pet Care Provisions">
         <DecisionRow
@@ -818,6 +829,8 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           </div>
         )}
 
+        {!essential && (
+        <>
         <div className="mt-6">
           <DesignSheetCheckboxOption
             label="Include provisions for a common trust for Grantor's children?"
@@ -888,6 +901,8 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
             onChange={checked => updateTrustDetails({ allow_distributions_to_dependents_if_incapacitated: checked })}
           />
         </div>
+        </>
+        )}
       </SectionBlock>
 
       <TrustBeneficiariesSection
@@ -899,6 +914,8 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
         remoteBeneficiariesOnly
       />
 
+      {!essential && (
+      <>
       <SectionBlock title="Administrative Provisions">
         <div className="space-y-3">
           <DesignSheetCheckboxOption
@@ -1088,6 +1105,8 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           />
         </div>
       </SectionBlock>
+      </>
+      )}
     </DesignSectionContent>
   )
 }
