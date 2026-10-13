@@ -224,7 +224,7 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `fiduciaries.trustee.co_second_successor.full_name` | Trustee Co Second Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_successor` | Co Successor | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.co_successor.full_name` | Co-successor trustee | Fiduciary Role Assignment | (section) |
-| `fiduciaries.trustee.co_trustees_action` | Co-trustee decision standard | Trust Details | `cotrustee_decision_standard` |
+| `fiduciaries.trustee.co_trustees_action` | Co-trustee decision standard | Trust | `cotrustee_decision_standard` |
 | `fiduciaries.trustee.primary.address` | Address | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.primary.email` | Email | Fiduciary Role Assignment | (section) |
 | `fiduciaries.trustee.primary.full_name` | Trustee | Fiduciary Role Assignment | (section) |
@@ -435,103 +435,103 @@ Where the drafting UI sends the attorney when a generator field is missing. When
 | `testamentary_trust.trust_protector_requested` | Trust Protector Requested | Will Details | (section) |
 | `testamentary_trust.trust_protector.full_name` | Trust protector | Will Details | `trust_protector_name` |
 | `testamentary_trust.trustee_structure` | Trustee Structure | Will Details | (section) |
-| `trust.blended_family` | Blended Family | Trust Details | (section) |
-| `trust.blended_family.client_children` | Client Children | Trust Details | (section) |
-| `trust.blended_family.client_children[]` | Client Children | Trust Details | (section) |
-| `trust.blended_family.spouse_children` | Spouse Children | Trust Details | (section) |
-| `trust.blended_family.spouse_children[]` | Spouse Children | Trust Details | (section) |
-| `trust.bypass_trust.allow_discretionary_sprinkling` | Allow Discretionary Sprinkling | Trust Details | (section) |
-| `trust.bypass_trust.fixed_amount` | Fixed Amount | Trust Details | (section) |
-| `trust.bypass_trust.formula` | Formula | Trust Details | (section) |
-| `trust.bypass_trust.percentage` | Percentage | Trust Details | (section) |
-| `trust.bypass_trust.remainder_power_of_appointment` | Remainder Power Of Appointment | Trust Details | (section) |
-| `trust.bypass_trust.type` | Type | Trust Details | (section) |
+| `trust.blended_family` | Blended Family | Trust | (section) |
+| `trust.blended_family.client_children` | Client Children | Trust | (section) |
+| `trust.blended_family.client_children[]` | Client Children | Trust | (section) |
+| `trust.blended_family.spouse_children` | Spouse Children | Trust | (section) |
+| `trust.blended_family.spouse_children[]` | Spouse Children | Trust | (section) |
+| `trust.bypass_trust.allow_discretionary_sprinkling` | Allow Discretionary Sprinkling | Trust | (section) |
+| `trust.bypass_trust.fixed_amount` | Fixed Amount | Trust | (section) |
+| `trust.bypass_trust.formula` | Formula | Trust | (section) |
+| `trust.bypass_trust.percentage` | Percentage | Trust | (section) |
+| `trust.bypass_trust.remainder_power_of_appointment` | Remainder Power Of Appointment | Trust | (section) |
+| `trust.bypass_trust.type` | Type | Trust | (section) |
 | `trust.contingent_beneficiary.full_name` | Contingent beneficiary | Will Details | `single_beneficiary_remainder` |
-| `trust.date` | Trust date | Trust Details | `trust_date` |
-| `trust.descendants_distribution.distribution_age` | Distribution Age | Trust Details | (section) |
-| `trust.descendants_distribution.method` | Distribution method | Trust Details | `residual_beneficiary_method` |
-| `trust.descendants_distribution.stage_1_age` | Stage 1 Age | Trust Details | (section) |
-| `trust.descendants_distribution.stage_2_age` | Stage 2 Age | Trust Details | (section) |
-| `trust.descendants_distribution.stage_3_age` | Stage 3 Age | Trust Details | (section) |
-| `trust.disinherited` | Disinherited | Trust Details | (section) |
-| `trust.disinherited[]` | Disinherited | Trust Details | (section) |
-| `trust.display_date` | Display Date | Trust Details | (section) |
-| `trust.display_name` | Trust name | Trust Details | `trust_name` |
-| `trust.include_common_trust_for_children` | Include Common Trust For Children | Trust Details | (section) |
-| `trust.marital_trust.include_qdot` | Include Qdot | Trust Details | (section) |
-| `trust.marital_trust.invasion_powers` | Invasion Powers | Trust Details | (section) |
-| `trust.marital_trust.remainder_power_of_appointment` | Remainder Power Of Appointment | Trust Details | (section) |
-| `trust.marital_trust.type` | Type | Trust Details | (section) |
-| `trust.name` | Trust name | Trust Details | `trust_name` |
-| `trust.provisions.allow_charitable_giving_during_incapacity` | Allow Charitable Giving During Incapacity | Trust Details | (section) |
-| `trust.provisions.allow_direct_distributions_to_young_or_incapacitated` | Allow Direct Distributions To Young Or Incapacitated | Trust Details | (section) |
-| `trust.provisions.allow_distributions_to_dependents_if_incapacitated` | Allow Distributions To Dependents If Incapacitated | Trust Details | (section) |
-| `trust.provisions.allow_pa_np_substitute` | Allow Pa Np Substitute | Trust Details | (section) |
-| `trust.provisions.allow_protector_convert_conduit_trusts` | Allow Protector Convert Conduit Trusts | Trust Details | (section) |
-| `trust.provisions.allow_psychologist_substitute` | Allow Psychologist Substitute | Trust Details | (section) |
-| `trust.provisions.allow_sole_trustee_to_appoint_cotrustees` | Allow Sole Trustee To Appoint Cotrustees | Trust Details | (section) |
-| `trust.provisions.allow_special_trustee` | Allow Special Trustee | Trust Details | (section) |
-| `trust.provisions.allow_trustee_change_situs` | Allow Trustee Change Situs | Trust Details | (section) |
-| `trust.provisions.allow_trustee_to_designate_alternates` | Allow Trustee To Designate Alternates | Trust Details | (section) |
-| `trust.provisions.asset_schedule_catchall` | Asset Schedule Catchall | Trust Details | (section) |
-| `trust.provisions.asset_schedule_format` | Asset Schedule Format | Trust Details | (section) |
-| `trust.provisions.asset_schedule_non_trust` | Asset Schedule Non Trust | Trust Details | (section) |
-| `trust.provisions.asset_schedule_signature_block` | Asset Schedule Signature Block | Trust Details | (section) |
-| `trust.provisions.forgive_all_debts` | Forgive All Debts | Trust Details | (section) |
-| `trust.provisions.hold_distributions_for_young_beneficiaries` | Hold Distributions For Young Beneficiaries | Trust Details | (section) |
-| `trust.provisions.include_arts_education` | Include Arts Education | Trust Details | (section) |
-| `trust.provisions.include_contingent_snt` | Include Contingent Snt | Trust Details | (section) |
-| `trust.provisions.include_creditor_divorce_provisions` | Include Creditor Divorce Provisions | Trust Details | (section) |
-| `trust.provisions.include_disappearance_definition` | Include Disappearance Definition | Trust Details | (section) |
-| `trust.provisions.include_discretionary_distribution_definition` | Include Discretionary Distribution Definition | Trust Details | (section) |
-| `trust.provisions.include_education_expenses_definition` | Include Education Expenses Definition | Trust Details | (section) |
-| `trust.provisions.include_firearms_provisions` | Include Firearms Provisions | Trust Details | (section) |
-| `trust.provisions.include_homeschooling` | Include Homeschooling | Trust Details | (section) |
-| `trust.provisions.include_incapacity_definition` | Include Incapacity Definition | Trust Details | (section) |
-| `trust.provisions.include_marital_deduction_savings_language` | Include Marital Deduction Savings Language | Trust Details | (section) |
-| `trust.provisions.include_no_contest_clause` | Include No Contest Clause | Trust Details | (section) |
-| `trust.provisions.include_retirement_account_provisions` | Include Retirement Account Provisions | Trust Details | (section) |
-| `trust.provisions.include_reverse_mortgage_clause` | Include Reverse Mortgage Clause | Trust Details | (section) |
-| `trust.provisions.include_slayer_provision` | Include Slayer Provision | Trust Details | (section) |
-| `trust.provisions.include_substance_abuse` | Include Substance Abuse | Trust Details | (section) |
-| `trust.provisions.include_vocational_training` | Include Vocational Training | Trust Details | (section) |
-| `trust.provisions.limit_duty_to_account` | Limit Duty To Account | Trust Details | (section) |
-| `trust.provisions.name_people_in_no_contest_clause` | Name People In No Contest Clause | Trust Details | (section) |
-| `trust.provisions.parent_child_relationship_definition` | Parent Child Relationship Definition | Trust Details | (section) |
-| `trust.provisions.power_529_plans` | Power 529 Plans | Trust Details | (section) |
-| `trust.provisions.power_closely_held_businesses` | Power Closely Held Businesses | Trust Details | (section) |
-| `trust.provisions.power_farms_ranches` | Power Farms Ranches | Trust Details | (section) |
-| `trust.provisions.power_professional_corporations` | Power Professional Corporations | Trust Details | (section) |
-| `trust.provisions.prorate_estate_taxes` | Prorate Estate Taxes | Trust Details | (section) |
-| `trust.provisions.protect_us_trust_status` | Protect Us Trust Status | Trust Details | (section) |
-| `trust.provisions.require_mandatory_arbitration` | Require Mandatory Arbitration | Trust Details | (section) |
-| `trust.provisions.require_trustee_bond` | Require Trustee Bond | Trust Details | (section) |
-| `trust.provisions.settlor_incapacity_determined_by` | Settlor Incapacity Determined By | Trust Details | (section) |
-| `trust.provisions.special_trustee_instructions` | Special Trustee Instructions | Trust Details | (section) |
-| `trust.provisions.subchapter_s_provisions` | Subchapter S Provisions | Trust Details | (section) |
-| `trust.provisions.trustee_incapacity_determined_by` | Trustee Incapacity Determined By | Trust Details | (section) |
-| `trust.remote_beneficiaries.charity.name` | Name | Trust Details | (section) |
+| `trust.date` | Trust date | Trust | `trust_date` |
+| `trust.descendants_distribution.distribution_age` | Distribution Age | Trust | (section) |
+| `trust.descendants_distribution.method` | Distribution method | Trust | `residual_beneficiary_method` |
+| `trust.descendants_distribution.stage_1_age` | Stage 1 Age | Trust | (section) |
+| `trust.descendants_distribution.stage_2_age` | Stage 2 Age | Trust | (section) |
+| `trust.descendants_distribution.stage_3_age` | Stage 3 Age | Trust | (section) |
+| `trust.disinherited` | Disinherited | Trust | (section) |
+| `trust.disinherited[]` | Disinherited | Trust | (section) |
+| `trust.display_date` | Display Date | Trust | (section) |
+| `trust.display_name` | Trust name | Trust | `trust_name` |
+| `trust.include_common_trust_for_children` | Include Common Trust For Children | Trust | (section) |
+| `trust.marital_trust.include_qdot` | Include Qdot | Trust | (section) |
+| `trust.marital_trust.invasion_powers` | Invasion Powers | Trust | (section) |
+| `trust.marital_trust.remainder_power_of_appointment` | Remainder Power Of Appointment | Trust | (section) |
+| `trust.marital_trust.type` | Type | Trust | (section) |
+| `trust.name` | Trust name | Trust | `trust_name` |
+| `trust.provisions.allow_charitable_giving_during_incapacity` | Allow Charitable Giving During Incapacity | Trust | (section) |
+| `trust.provisions.allow_direct_distributions_to_young_or_incapacitated` | Allow Direct Distributions To Young Or Incapacitated | Trust | (section) |
+| `trust.provisions.allow_distributions_to_dependents_if_incapacitated` | Allow Distributions To Dependents If Incapacitated | Trust | (section) |
+| `trust.provisions.allow_pa_np_substitute` | Allow Pa Np Substitute | Trust | (section) |
+| `trust.provisions.allow_protector_convert_conduit_trusts` | Allow Protector Convert Conduit Trusts | Trust | (section) |
+| `trust.provisions.allow_psychologist_substitute` | Allow Psychologist Substitute | Trust | (section) |
+| `trust.provisions.allow_sole_trustee_to_appoint_cotrustees` | Allow Sole Trustee To Appoint Cotrustees | Trust | (section) |
+| `trust.provisions.allow_special_trustee` | Allow Special Trustee | Trust | (section) |
+| `trust.provisions.allow_trustee_change_situs` | Allow Trustee Change Situs | Trust | (section) |
+| `trust.provisions.allow_trustee_to_designate_alternates` | Allow Trustee To Designate Alternates | Trust | (section) |
+| `trust.provisions.asset_schedule_catchall` | Asset Schedule Catchall | Trust | (section) |
+| `trust.provisions.asset_schedule_format` | Asset Schedule Format | Trust | (section) |
+| `trust.provisions.asset_schedule_non_trust` | Asset Schedule Non Trust | Trust | (section) |
+| `trust.provisions.asset_schedule_signature_block` | Asset Schedule Signature Block | Trust | (section) |
+| `trust.provisions.forgive_all_debts` | Forgive All Debts | Trust | (section) |
+| `trust.provisions.hold_distributions_for_young_beneficiaries` | Hold Distributions For Young Beneficiaries | Trust | (section) |
+| `trust.provisions.include_arts_education` | Include Arts Education | Trust | (section) |
+| `trust.provisions.include_contingent_snt` | Include Contingent Snt | Trust | (section) |
+| `trust.provisions.include_creditor_divorce_provisions` | Include Creditor Divorce Provisions | Trust | (section) |
+| `trust.provisions.include_disappearance_definition` | Include Disappearance Definition | Trust | (section) |
+| `trust.provisions.include_discretionary_distribution_definition` | Include Discretionary Distribution Definition | Trust | (section) |
+| `trust.provisions.include_education_expenses_definition` | Include Education Expenses Definition | Trust | (section) |
+| `trust.provisions.include_firearms_provisions` | Include Firearms Provisions | Trust | (section) |
+| `trust.provisions.include_homeschooling` | Include Homeschooling | Trust | (section) |
+| `trust.provisions.include_incapacity_definition` | Include Incapacity Definition | Trust | (section) |
+| `trust.provisions.include_marital_deduction_savings_language` | Include Marital Deduction Savings Language | Trust | (section) |
+| `trust.provisions.include_no_contest_clause` | Include No Contest Clause | Trust | (section) |
+| `trust.provisions.include_retirement_account_provisions` | Include Retirement Account Provisions | Trust | (section) |
+| `trust.provisions.include_reverse_mortgage_clause` | Include Reverse Mortgage Clause | Trust | (section) |
+| `trust.provisions.include_slayer_provision` | Include Slayer Provision | Trust | (section) |
+| `trust.provisions.include_substance_abuse` | Include Substance Abuse | Trust | (section) |
+| `trust.provisions.include_vocational_training` | Include Vocational Training | Trust | (section) |
+| `trust.provisions.limit_duty_to_account` | Limit Duty To Account | Trust | (section) |
+| `trust.provisions.name_people_in_no_contest_clause` | Name People In No Contest Clause | Trust | (section) |
+| `trust.provisions.parent_child_relationship_definition` | Parent Child Relationship Definition | Trust | (section) |
+| `trust.provisions.power_529_plans` | Power 529 Plans | Trust | (section) |
+| `trust.provisions.power_closely_held_businesses` | Power Closely Held Businesses | Trust | (section) |
+| `trust.provisions.power_farms_ranches` | Power Farms Ranches | Trust | (section) |
+| `trust.provisions.power_professional_corporations` | Power Professional Corporations | Trust | (section) |
+| `trust.provisions.prorate_estate_taxes` | Prorate Estate Taxes | Trust | (section) |
+| `trust.provisions.protect_us_trust_status` | Protect Us Trust Status | Trust | (section) |
+| `trust.provisions.require_mandatory_arbitration` | Require Mandatory Arbitration | Trust | (section) |
+| `trust.provisions.require_trustee_bond` | Require Trustee Bond | Trust | (section) |
+| `trust.provisions.settlor_incapacity_determined_by` | Settlor Incapacity Determined By | Trust | (section) |
+| `trust.provisions.special_trustee_instructions` | Special Trustee Instructions | Trust | (section) |
+| `trust.provisions.subchapter_s_provisions` | Subchapter S Provisions | Trust | (section) |
+| `trust.provisions.trustee_incapacity_determined_by` | Trustee Incapacity Determined By | Trust | (section) |
+| `trust.remote_beneficiaries.charity.name` | Name | Trust | (section) |
 | `trust.remote_beneficiaries.individuals` | Remote beneficiaries | Last Will and Testament | `remote_beneficiary` |
-| `trust.remote_beneficiaries.individuals[]` | Individuals | Trust Details | (section) |
-| `trust.remote_beneficiaries.method` | Method | Trust Details | (section) |
-| `trust.representation_type` | Representation Type | Trust Details | (section) |
-| `trust.residual_beneficiary` | Residual Beneficiary | Trust Details | (section) |
-| `trust.residuary_after_death` | Residuary After Death | Trust Details | (section) |
-| `trust.restatement` | Restatement | Trust Details | (section) |
-| `trust.special_distributions_age` | Special Distributions Age | Trust Details | (section) |
-| `trust.spousal_funding` | Spousal Funding | Trust Details | (section) |
-| `trust.spouse_name` | Spouse Name | Trust Details | (section) |
-| `trust.successor_trustee_vacancy` | Successor Trustee Vacancy | Trust Details | (section) |
-| `trust.survivorship_requirement_days` | Survivorship Requirement Days | Trust Details | (section) |
-| `trust.tangible_personal_property.beneficiaries` | Beneficiaries | Trust Details | (section) |
-| `trust.tangible_personal_property.beneficiaries[]` | Beneficiaries | Trust Details | (section) |
+| `trust.remote_beneficiaries.individuals[]` | Individuals | Trust | (section) |
+| `trust.remote_beneficiaries.method` | Method | Trust | (section) |
+| `trust.representation_type` | Representation Type | Trust | (section) |
+| `trust.residual_beneficiary` | Residual Beneficiary | Trust | (section) |
+| `trust.residuary_after_death` | Residuary After Death | Trust | (section) |
+| `trust.restatement` | Restatement | Trust | (section) |
+| `trust.special_distributions_age` | Special Distributions Age | Trust | (section) |
+| `trust.spousal_funding` | Spousal Funding | Trust | (section) |
+| `trust.spouse_name` | Spouse Name | Trust | (section) |
+| `trust.successor_trustee_vacancy` | Successor Trustee Vacancy | Trust | (section) |
+| `trust.survivorship_requirement_days` | Survivorship Requirement Days | Trust | (section) |
+| `trust.tangible_personal_property.beneficiaries` | Beneficiaries | Trust | (section) |
+| `trust.tangible_personal_property.beneficiaries[]` | Beneficiaries | Trust | (section) |
 | `trust.tangible_personal_property.distribution_method` | Tangible property distribution | Estate Plan Design | `tangible_property_distribution` |
-| `trust.tangible_personal_property.named_individual.full_name` | Tangible Personal Property Named Individual | Trust Details | (section) |
-| `trust.tangible_personal_property.priority_beneficiaries` | Priority Beneficiaries | Trust Details | (section) |
-| `trust.tangible_personal_property.priority_beneficiaries[]` | Priority Beneficiaries | Trust Details | (section) |
-| `trust.trust_protector_requested` | Trust Protector Requested | Trust Details | (section) |
-| `trust.trust_protector.full_name` | Trust Trust Protector | Trust Details | (section) |
-| `trust.trustee_compensation` | Trustee Compensation | Trust Details | (section) |
+| `trust.tangible_personal_property.named_individual.full_name` | Tangible Personal Property Named Individual | Trust | (section) |
+| `trust.tangible_personal_property.priority_beneficiaries` | Priority Beneficiaries | Trust | (section) |
+| `trust.tangible_personal_property.priority_beneficiaries[]` | Priority Beneficiaries | Trust | (section) |
+| `trust.trust_protector_requested` | Trust Protector Requested | Trust | (section) |
+| `trust.trust_protector.full_name` | Trust Trust Protector | Trust | (section) |
+| `trust.trustee_compensation` | Trustee Compensation | Trust | (section) |
 | `will_cp.parent1.full_name` | Parent taking the residue of the will | College Preparation Plan | `college_prep.will_parent1_name` |
 | `will_cp.parent2.full_name` | Second parent taking the residue of the will | College Preparation Plan | `college_prep.will_parent2_name` |
 | `will.bond` | Bond | Will Details | (section) |

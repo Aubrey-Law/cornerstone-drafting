@@ -30,7 +30,9 @@ describe('design sheet plan-specific UI cleanup', () => {
       'utf8',
     )
 
-    expect(source).toContain('<SectionBlock title="Residuary Distribution">')
+    expect(source).toContain(
+      "title={provisionsOnly ? 'Distribution provisions' : 'Residuary Distribution'}",
+    )
     expect(source).toContain('Residual Beneficiary Method')
     expect(source).toContain("onChange('residual_beneficiary'")
     expect(source).toContain("onChange('staggered_distributions'")
