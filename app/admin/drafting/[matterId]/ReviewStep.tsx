@@ -62,7 +62,7 @@ import { logMatterActivity } from '@/lib/matterActivity'
 import { formatDateTime } from '@/lib/utils'
 import { type MatterDocument } from '@/types/database'
 import type { DraftingHubDocument, DraftingHubMatter } from '@/lib/queries/drafting'
-import { groupDraftHistory, nextUnreviewedDraft, runSelectedConversion, type ConversionResult } from '@/lib/drafting/reviewWorkflow'
+import { groupDraftHistory, nextUnreviewedDraft, reviewReadthrough, runSelectedConversion, type ConversionResult } from '@/lib/drafting/reviewWorkflow'
 import { DocumentComparisonDialog } from '@/components/drafting/DocumentComparisonDialog'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import type { ShareCheck } from '@/lib/documents/shareGate'
@@ -268,7 +268,9 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const [pendingBulkShare, setPendingBulkShare] = useState<DraftingHubDocument[] | null>(null)
   const bulkShareables = recentDrafts.filter(d => isPdfDocument(d.name) && (d.missingCount ?? 0) === 0)
   const groups = groupDraftHistory(recentDrafts, supersededDrafts)
-  const nextUnreviewed = nextUnreviewedDraft(recentDrafts.map(d => ({ ...d, reviewedAt: effectiveReviewedAt(d) })), viewerDoc?.id ?? null)
+  const reviewedDrafts = recentDrafts.map(d => ({ ...d, reviewedAt: effectiveReviewedAt(d) }))
+  const wordReview = reviewReadthrough(reviewedDrafts)
+  const nextUnreviewed = nextUnreviewedDraft(reviewedDrafts, viewerDoc?.id ?? null)
 
   const confirmBulkShare = async () => {
     const docs = pendingBulkShare ?? []
@@ -427,6 +429,11 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   const wordDrafts = recentDrafts.filter(d => isWordDocument(d.name))
   const viewerDraft = viewerDoc ? recentDrafts.find(d => d.id === viewerDoc.id) ?? null : null
   const viewerIndex = viewerDoc ? wordDrafts.findIndex(d => d.id === viewerDoc.id) : -1
+  const openUnreviewed = viewerDraft && isWordDocument(viewerDraft.name) && !effectiveReviewedAt(viewerDraft)
+    ? viewerDraft
+    : null
+  const leadDraft = openUnreviewed
+    ?? (nextUnreviewed ? recentDrafts.find(d => d.id === nextUnreviewed.id) ?? null : null)
 
   const switchToDraft = (id: string) => {
     const target = wordDrafts.find(d => d.id === id)
@@ -443,10 +450,46 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
   return (
     <div className="guided-interview guided-zinc space-y-4">
       <GuidedIntroCard
-        pct={sharedDrafts.length > 0 && recentDrafts.every(d => effectiveReviewedAt(d)) ? 100 : recentDrafts.length > 0 ? 50 : 0}
+        pct={wordReview.pct}
         title="Review and share drafts"
-        subtitle="Read the current version, mark it reviewed, and convert selected Word drafts to PDF. Conversion does not mark a document reviewed or share it."
+        subtitle={wordReview.total === 0
+          ? 'Generate drafts, then read each Word version and mark it reviewed.'
+          : `${wordReview.reviewed} of ${wordReview.total} Word drafts reviewed. Convert and share after the read-through.`}
       />
+
+      {leadDraft ? (
+        <section style={guidedCardStyle} aria-label="Next to review">
+          <p style={guidedKickerStyle}>Next to review</p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-medium" style={{ color: 'var(--gi-heading)' }}>{leadDraft.name}</h2>
+              <p className="mt-1 text-xs" style={{ color: 'var(--gi-muted)' }}>
+                {openUnreviewed
+                  ? 'Read this version, then mark it reviewed.'
+                  : 'Open this draft and read it before marking it reviewed.'}
+              </p>
+            </div>
+            {openUnreviewed ? (
+              <Button
+                size="sm"
+                disabled={reviewingId !== null || !hasCurrentBytes(leadDraft)}
+                onClick={() => void handleToggleReviewed(leadDraft, true)}
+              >
+                {reviewingId === leadDraft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Mark reviewed'}
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => openInApp(leadDraft)}>
+                Review in app
+              </Button>
+            )}
+          </div>
+        </section>
+      ) : wordReview.total > 0 ? (
+        <section style={guidedCardStyle}>
+          <p style={guidedKickerStyle}>Next to review</p>
+          <p className="mt-2 text-sm" style={{ color: 'var(--gi-heading)' }}>All current Word drafts are marked reviewed.</p>
+        </section>
+      ) : null}
 
       <section style={{ ...guidedCardStyle, padding: 0, overflow: 'hidden' }}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--gi-divider)' }}>
@@ -472,17 +515,6 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
                 Share {bulkShareables.length} eligible PDFs
               </Button>
             )}
-            {combinableDrafts.length > 1 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 text-micro"
-                onClick={() => setCombineOpen(true)}
-              >
-                <Combine className="h-3.5 w-3.5" />
-                Combine into one file
-              </Button>
-            )}
             <input
               ref={pdfUploadRef}
               type="file"
@@ -490,26 +522,30 @@ export default function ReviewStep({ matterId, hubMatter, sharedDrafts }: Review
               className="hidden"
               onChange={e => void handleUploadSharedPdf(e.target.files)}
             />
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1.5 text-micro"
-              disabled={uploadingPdf}
-              onClick={() => pdfUploadRef.current?.click()}
-            >
-              {uploadingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-              Upload PDF to share
-            </Button>
-            {supersededDrafts.length > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1 border-amber-border bg-amber-bg text-micro text-amber hover:bg-amber-light"
-                onClick={() => setShowPrevious(prev => !prev)}
-              >
-                {showPrevious ? 'Hide' : 'Show'} previous versions ({supersededDrafts.length})
-              </Button>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="h-7 w-7" aria-label="More document actions">
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {combinableDrafts.length > 1 && (
+                  <DropdownMenuItem onSelect={() => setCombineOpen(true)}>
+                    <Combine className="mr-2 h-4 w-4" />
+                    Combine into one file
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem disabled={uploadingPdf} onSelect={() => pdfUploadRef.current?.click()}>
+                  {uploadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  Upload PDF to share
+                </DropdownMenuItem>
+                {supersededDrafts.length > 0 && (
+                  <DropdownMenuItem onSelect={() => setShowPrevious(prev => !prev)}>
+                    {showPrevious ? 'Hide' : 'Show'} previous versions ({supersededDrafts.length})
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             {supersededDrafts.length > 0 && (
               <Badge variant="outline" className="border-amber-border bg-amber-bg text-micro text-amber">
                 {supersededDrafts.length} superseded

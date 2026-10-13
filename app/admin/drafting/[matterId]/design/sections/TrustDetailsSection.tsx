@@ -78,8 +78,11 @@ interface DocumentSectionProps extends SectionProps {
   matter: PipelineMatter
   onAddContact: (data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
   onUpdateContact?: (id: string, data: Omit<MatterContact, 'id'>) => Promise<MatterContact>
-  /** Essential Estate Plan Design keeps joint trust, name, bequests, pets, residuary, and remote beneficiaries. */
-  variant?: 'full' | 'essential'
+  /**
+   * `plan` / `essential` is the interview: joint trust, name, bequests, pets,
+   * residuary, and remote beneficiaries. `provisions` is the second pass.
+   */
+  variant?: 'full' | 'essential' | 'plan' | 'provisions'
 }
 
 const YES_NO = [
@@ -211,7 +214,8 @@ const TRUSTEE_INCAPACITY_DETERMINER_OPTIONS = [
 
 export function TrustDetailsSection(props: DocumentSectionProps) {
   const { sheet, onChange, contacts, matter } = props
-  const essential = props.variant === 'essential'
+  const essential = props.variant === 'essential' || props.variant === 'plan'
+  const provisionsOnly = props.variant === 'provisions'
   const { onAddContact, onUpdateContact } = props
   const original = (field: string) => sheet.overrides?.[field]?.original
   const derivedTrustName = deriveTrustName(sheet, matter)
@@ -303,6 +307,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
         <SectionHelp>Configure the trust structure, name, protector, trustees, and how the residuary is distributed.</SectionHelp>
       )}
 
+      {!provisionsOnly && (
       <SectionBlock title={essential ? 'Joint Trust' : 'Trust Structure'}>
         <DecisionRow
           question="Joint or separate trusts?"
@@ -316,7 +321,11 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           ]}
           onChange={v => onChange('is_joint', v === 'yes')}
         />
-        {!essential && married && !sheet.is_joint && (
+      </SectionBlock>
+      )}
+
+      {!essential && married && !sheet.is_joint && (
+        <SectionBlock title="Spousal Trust Funding">
           <DecisionRow
             question="Spousal Trust Funding"
             help="Choose how the surviving spouse receives or holds the residuary estate."
@@ -324,14 +333,15 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
             options={SPOUSAL_TRUST_FUNDING_OPTIONS}
             onChange={value => onChange('decisions', prevSheet => setTrustPlanningType(prevSheet, value))}
           />
-        )}
-      </SectionBlock>
+        </SectionBlock>
+      )}
 
       {!essential && jointTrust && <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="joint" />}
       {!essential && spouseTrustsFromResiduary && (
         <MaritalBypassTrustOptions sheet={sheet} onChange={onChange} variant="separate" />
       )}
 
+      {!provisionsOnly && (
       <SectionBlock title="Trust Name">
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <div>
@@ -365,6 +375,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           </div>
         )}
       </SectionBlock>
+      )}
 
       {!essential && (
       <>
@@ -612,6 +623,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
       </>
       )}
 
+      {!provisionsOnly && (
       <TrustBeneficiariesSection
         sheet={sheet}
         onChange={onChange}
@@ -620,6 +632,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
         onUpdateContact={onUpdateContact}
         specificBequestsOnly
       />
+      )}
 
       {!essential && (
       <SectionBlock title="Tangible Personal Property">
@@ -648,6 +661,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
       </SectionBlock>
       )}
 
+      {!provisionsOnly && (
       <SectionBlock title="Pet Care Provisions">
         <DecisionRow
           question="Pet care provision"
@@ -709,8 +723,12 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           </div>
         )}
       </SectionBlock>
+      )}
 
-      <SectionBlock title="Residuary Distribution">
+      {(!provisionsOnly || !essential) && (
+      <SectionBlock title={provisionsOnly ? 'Distribution provisions' : 'Residuary Distribution'}>
+        {!provisionsOnly && (
+        <>
         <DecisionRow
           question="Residual beneficiary"
           value={sheet.residual_beneficiary}
@@ -829,6 +847,8 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
           </div>
         )}
 
+        </>
+        )}
         {!essential && (
         <>
         <div className="mt-6">
@@ -904,7 +924,9 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
         </>
         )}
       </SectionBlock>
+      )}
 
+      {!provisionsOnly && (
       <TrustBeneficiariesSection
         sheet={sheet}
         onChange={onChange}
@@ -913,6 +935,7 @@ export function TrustDetailsSection(props: DocumentSectionProps) {
         onUpdateContact={onUpdateContact}
         remoteBeneficiariesOnly
       />
+      )}
 
       {!essential && (
       <>

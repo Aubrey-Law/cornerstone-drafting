@@ -55,11 +55,19 @@ describe('design sheet action bar', () => {
 
     expect(workspace).toContain('id="drafting-design-actions"')
     expect(workspace).toContain('Generates from the sheet as it stands and skips the section-by-section pass.')
+    const readiness = fs.readFileSync(
+      path.join(process.cwd(), 'lib/designSheetReadiness.ts'),
+      'utf8',
+    )
+
     expect(page).toContain('drafting-design-actions')
     expect(page).toContain('Gray from intake, amber overridden, white attorney-only.')
-    expect(page).toContain('Matter type must be confirmed before drafting')
+    expect(readiness).toContain('MATTER_TYPE_REQUIRED_MESSAGE')
+    expect(readiness).toContain("'matter_type'")
+    expect(page).not.toContain('Matter type must be confirmed before drafting')
     expect(page).not.toContain('Show unresolved decisions by section')
     expect(page).not.toContain('>Next unresolved decision<')
+    expect(personal).toContain('Who is this plan for?')
     expect(personal).toContain('No children listed.')
     expect(personal).toContain('Add Child')
     expect(personal).not.toContain('Add First Child')

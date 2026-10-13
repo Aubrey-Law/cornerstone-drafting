@@ -27,7 +27,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { resolveDraftComposition } from '@/lib/matter/matterType'
 import { DesignFinalReview } from '@/components/design-sheet/DesignFinalReview'
 import {
   ResponsiveDetailRail,
@@ -38,7 +37,7 @@ import { dockClausePreview } from '@/lib/designSheet/workspaceLayout'
 import { Button } from '@/components/ui/button'
 import { SharedFieldsProvider } from '@/components/sharedFields/provider'
 import { designFieldTargetId } from '@/lib/designSheetReadiness'
-import { getDesignPlanTrack, isCollegePrepDesignSheet } from '@/lib/collegePrepDesign'
+import { getDesignPlanTrack } from '@/lib/collegePrepDesign'
 import { designGroupForLayout } from '@/lib/designSheet/designSectionNav'
 import {
   ESSENTIAL_DESIGN_SHEET_TITLE,
@@ -89,8 +88,6 @@ const DesignSheetImportDialog = dynamic(
   () => import('@/components/design-sheet/DesignSheetImportDialog').then(module => ({ default: module.DesignSheetImportDialog })),
   { ssr: false },
 )
-
-const MATTER_TYPE_BLOCK = 'Matter type must be confirmed before drafting'
 
 export interface DesignSheetPageProps {
   matterId: string
@@ -160,6 +157,7 @@ function DesignSheetPageContent({
     isPending,
     exporting,
     updateField,
+    setMatterType,
     validationValue,
     handleSave,
     contactsState,
@@ -180,9 +178,8 @@ function DesignSheetPageContent({
     blockingDetails,
   } = state
 
-  const handleClauseStatus = useCallback((status: { count: number; error: string | null }) => {
+  const handleClauseStatus = useCallback((status: { count: number }) => {
     setClauseTextCount(status.count)
-    setClausePreviewError(status.error)
   }, [])
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -197,7 +194,6 @@ function DesignSheetPageContent({
   const [clausePreviewOpen, setClausePreviewOpen] = useState(true)
   const [clauseDrawerOpen, setClauseDrawerOpen] = useState(false)
   const [clauseTextCount, setClauseTextCount] = useState(0)
-  const [clausePreviewError, setClausePreviewError] = useState<string | null>(null)
   const [previewMount, setPreviewMount] = useState<HTMLDivElement | null>(null)
   const [actionHost, setActionHost] = useState<HTMLElement | null>(null)
   const [barHeight, setBarHeight] = useState(0)
@@ -279,6 +275,7 @@ function DesignSheetPageContent({
     documentInclusions,
     selectedDocKeysCount,
     updateField,
+    onMatterTypeChange: value => { void setMatterType(value) },
     updateLpPatch,
     handleAddContact,
     handleUpdateContact,
@@ -299,6 +296,7 @@ function DesignSheetPageContent({
     matter,
     matterId,
     selectedDocKeysCount,
+    setMatterType,
     sheet,
     updateField,
     updateLpPatch,
@@ -320,8 +318,13 @@ function DesignSheetPageContent({
   const layout = resolveDesignSheetLayout({ practiceArea: matter.practice_area, sheet })
   const canSwitchDesignSheet = isEssentialDesignPracticeArea(matter.practice_area)
   const groups = useMemo(
-    () => buildDesignSheetGroups(visibleDesignSections(displayedSectionDefs), getDesignPlanTrack(sheet), layout),
-    [displayedSectionDefs, layout, sheet],
+    () => buildDesignSheetGroups(
+      visibleDesignSections(displayedSectionDefs),
+      getDesignPlanTrack(sheet),
+      layout,
+      documentInclusions,
+    ),
+    [displayedSectionDefs, documentInclusions, layout, sheet],
   )
 
   const handleHideUnusedChange = useCallback((checked: boolean) => {
@@ -497,18 +500,6 @@ function DesignSheetPageContent({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [handleSave])
 
-  const matterTypeMessage = useMemo(() => {
-    if (sheet.matter_type === undefined) return null
-    try {
-      resolveDraftComposition(sheet.matter_type, sheet.is_joint === true, {
-        singleClientPlan: isCollegePrepDesignSheet(sheet),
-      })
-      return null
-    } catch (error) {
-      return error instanceof Error && error.message === MATTER_TYPE_BLOCK ? error.message : null
-    }
-  }, [sheet])
-
   const fieldBlockerRows = blockingDetails.flatMap(detail => detail.blockers).flatMap(item => {
     const groupId = designGroupForLayout(item.sectionId, layout)
     if (!groupId) return []
@@ -525,26 +516,15 @@ function DesignSheetPageContent({
   const orderedFieldBlockers = fieldBlockerRows.length > 0
     ? [...fieldBlockerRows.slice(blockerStart), ...fieldBlockerRows.slice(0, blockerStart)]
     : []
-  const matterTypeLabel = matterTypeMessage ?? (clausePreviewError === MATTER_TYPE_BLOCK ? MATTER_TYPE_BLOCK : null)
-  const blockerRows = [
-    ...(matterTypeLabel ? [{
-      id: 'matter-type',
-      label: MATTER_TYPE_BLOCK,
-    }] : []),
-    ...orderedFieldBlockers.map((item, index) => ({
-      id: item.id,
-      label: item.label,
-      nextUnresolved: index === 0,
-    })),
-  ]
+  const blockerRows = orderedFieldBlockers.map((item, index) => ({
+    id: item.id,
+    label: item.label,
+    nextUnresolved: index === 0,
+  }))
   const onSelectBlockerRow = useCallback((id: string) => {
-    if (id === 'matter-type') {
-      router.push(`/admin/matters/${matterId}`)
-      return
-    }
     const item = fieldBlockerRows.find(row => row.id === id)
     if (item) handleBlockerSelect(item)
-  }, [fieldBlockerRows, handleBlockerSelect, matterId, router])
+  }, [fieldBlockerRows, handleBlockerSelect])
 
   useLayoutEffect(() => {
     if (!embedded) {

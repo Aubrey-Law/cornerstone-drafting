@@ -193,4 +193,24 @@ describe('functional fiduciary slot updates', () => {
     expect(grid).toContain('normalizeFiduciarySlots(updater(resolved))')
     expect(grid).toContain('removeFiduciaryContact')
   })
+
+  it('keeps matter type off design sheet columns and decisions', () => {
+    const payload = buildDesignSheetPersistencePayload({
+      matter_type: 'couple',
+      trust_name: 'The Doe Trust',
+      decisions: { matter_type: 'individual', plan_track: 'estate' },
+    } as Parameters<typeof buildDesignSheetPersistencePayload>[0])
+
+    expect(payload).not.toHaveProperty('matter_type')
+    expect(payload.decisions).not.toHaveProperty('matter_type')
+    expect(payload.decisions).toMatchObject({ plan_track: 'estate' })
+    expect(payload.trust_name).toBe('The Doe Trust')
+
+    const inflated = inflateDesignSheetRow({
+      trust_name: 'The Doe Trust',
+      decisions: { matter_type: 'couple', plan_track: 'estate' },
+    })
+    expect(inflated?.decisions).not.toHaveProperty('matter_type')
+    expect(inflated?.matter_type).toBeUndefined()
+  })
 })

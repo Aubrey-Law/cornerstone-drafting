@@ -462,8 +462,8 @@ describe('college prep design sheet — sections and readiness', () => {
       'healthcare',
       'notes',
     ])
-    // The estate sheet keeps its trust tab (the attorney can switch a trust back
-    // on) and never shows the college-prep one.
+    // Without an inclusions argument the estate catalog still lists the trust tab.
+    // Passing inclusions hides that group when the trust document is off.
     expect(estateTabs).toContain('trust')
     expect(estateTabs).not.toContain('college-plan')
   })

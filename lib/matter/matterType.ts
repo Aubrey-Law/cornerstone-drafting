@@ -9,6 +9,9 @@
 export type MatterType = 'individual' | 'couple'
 export type DraftComposition = 'individual' | 'married_individual' | 'married_joint'
 
+/** Shown on the design sheet and again if Generate is asked to run without it. */
+export const MATTER_TYPE_REQUIRED_MESSAGE = 'Matter type must be confirmed before drafting'
+
 export const MATTER_TYPE_OPTIONS: Array<{ value: MatterType; label: string }> = [
   { value: 'individual', label: 'Individual' },
   { value: 'couple', label: 'Couple' },
@@ -50,7 +53,7 @@ export function resolveDraftComposition(
   const normalized = normalizeMatterType(matterType)
   // Every other plan keeps the guard. Drafting a couple's plan as an
   // individual's, or the reverse, is silent and wrong — the error is the point.
-  if (!normalized) throw new Error('Matter type must be confirmed before drafting')
+  if (!normalized) throw new Error(MATTER_TYPE_REQUIRED_MESSAGE)
   if (normalized === 'individual') return 'individual'
   return isJoint ? 'married_joint' : 'married_individual'
 }

@@ -31,6 +31,7 @@ const S = DESIGN_SECTION_IDS
 
 // Exact path → target. Friendly labels keep the preflight checklist readable.
 const EXACT: Record<string, Entry> = {
+  'matter.matter_type': { label: 'Matter type must be confirmed before drafting', sectionId: S.clientInformation, targetField: 'matter_type' },
   'client.full_name': { label: 'Client legal name', sectionId: S.clientInformation, targetField: 'client_name' },
   'client.street_address': { label: 'Street address', sectionId: S.clientInformation, targetField: 'street' },
   'client.city': { label: 'City', sectionId: S.clientInformation, targetField: 'city' },

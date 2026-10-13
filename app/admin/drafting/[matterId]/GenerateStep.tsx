@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { designTargetForMissingField, missingFieldDisplayLabel } from '@/lib/estateGenerator/missingFieldDesignMap'
+import { MATTER_TYPE_REQUIRED_MESSAGE } from '@/lib/matter/matterType'
 import { decodeDraftDownloadMeta } from '@/lib/drafting/draftDownloadMeta'
 import {
   blobToBase64,
@@ -332,7 +333,27 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
         const data = await response.json().catch(() => ({})) as { error?: string; detail?: string }
         if (!response.ok) {
           const message = data.detail ?? data.error ?? 'Draft preflight failed.'
-          setResult({ success: false, error: message })
+          // Matter type is refused before a preflight report exists. Surface it
+          // on the same report so the Fix link can open the design-sheet field.
+          if (message === MATTER_TYPE_REQUIRED_MESSAGE) {
+            setPreflight({
+              sourceRevision: 'matter-type-required',
+              matterId,
+              designSheetId: null,
+              engine: 'node',
+              canGenerate: false,
+              packageNames: [],
+              documentsToGenerate: [],
+              unsupportedDocumentLabels: [],
+              fallbackPackageNames: [],
+              missing: [],
+              missingFields: [],
+              warnings: [],
+              error: message,
+            })
+          } else {
+            setResult({ success: false, error: message })
+          }
           toast.error(message)
           return
         }
@@ -906,7 +927,22 @@ export default function GenerateStep({ matterId, hubMatter, sourcePreview, befor
             )}
             {(preflight.error || preflight.warnings.length > 0 || preflight.unsupportedDocumentLabels.length > 0) && (
               <div className="mt-3 space-y-1 rounded border border-warning/20 bg-warning/10 p-3 text-xs text-warning">
-                {preflight.error && <p className="font-semibold">{preflight.error}</p>}
+                {preflight.error && (
+                  <p className="font-semibold">
+                    {preflight.error}
+                    {preflight.error === MATTER_TYPE_REQUIRED_MESSAGE && (
+                      <>
+                        {' '}
+                        <Link
+                          href={`/admin/drafting/${matterId}?step=design&focus=${encodeURIComponent('client-information:matter_type')}`}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          Fix →
+                        </Link>
+                      </>
+                    )}
+                  </p>
+                )}
                 {preflight.warnings.map(w => <p key={w}>{w}</p>)}
                 {preflight.unsupportedDocumentLabels.map(l => <p key={l}>Not generated yet: {l}</p>)}
               </div>
