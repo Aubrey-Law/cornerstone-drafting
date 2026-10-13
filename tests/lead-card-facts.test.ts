@@ -84,6 +84,18 @@ describe('how long this lead has been waiting', () => {
     expect(leadWaitingLabel(lead({ updated_at: '2026-08-22T12:00:00Z' }), NOW)).toBe('Quiet 2 days')
     expect(leadWaitingLabel(lead(), NOW)).toBe('Quiet 23 days')
   })
+
+  it('says the lead was updated today, and names the channel when the touch has one', () => {
+    expect(leadWaitingLabel(lead({ last_activity_at: '2026-08-24T09:00:00Z' }), NOW)).toBe('Updated today')
+    expect(leadWaitingLabel(lead({
+      last_activity_at: '2026-08-24T09:00:00Z',
+      last_activity_type: 'email_sent',
+    }), NOW)).toBe('Updated today · email')
+    expect(leadWaitingLabel(lead({
+      last_activity_at: '2026-08-24T09:00:00Z',
+      last_activity_type: 'note',
+    }), NOW)).toBe('Updated today')
+  })
 })
 
 describe('why a lead needs attention', () => {

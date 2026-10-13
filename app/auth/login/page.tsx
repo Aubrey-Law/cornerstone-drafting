@@ -125,7 +125,7 @@ function LoginForm() {
           <div>
             <h2 className="text-center text-lg font-medium text-foreground">Sign in</h2>
             <p className="mt-1 text-center text-xs text-muted-foreground">
-              Staff and client access
+              Staff and clients sign in here.
             </p>
           </div>
 

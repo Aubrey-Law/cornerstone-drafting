@@ -19,6 +19,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
+import { ledgerChargeLabel } from '@/lib/billing/ledgerCopy'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -423,7 +424,7 @@ export function InvoiceComposer({
                           htmlFor={`charge-${charge.id}`}
                           className="min-w-0 flex-1 cursor-pointer font-normal"
                         >
-                          {charge.label}
+                          {ledgerChargeLabel(charge.label, charge.amountBilled)}
                         </Label>
                         <span className="tabular-nums text-sm">{moneyExact(charge.amountBilled)}</span>
                       </li>
@@ -547,7 +548,7 @@ export function InvoiceComposer({
         issueDate,
         dueDate,
         lines: chosen.map(charge => ({
-          description: charge.label,
+          description: ledgerChargeLabel(charge.label, charge.amountBilled),
           amountCents: charge.amountBilled,
         })),
         subtotalCents,

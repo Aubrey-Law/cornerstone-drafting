@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { describeAutomationSchedule } from '@/lib/automations/scheduleLabel'
 
 export interface AutomationRunView {
   id: string
@@ -89,7 +90,7 @@ export function AutomationsClient({ initialRules }: { initialRules: AutomationRu
       const body = await response.json().catch(() => ({})) as { rule?: AutomationRuleView; error?: string }
       if (!response.ok || !body.rule) throw new Error(body.error ?? 'Automation could not be updated')
       setRules(current => current.map(item => item.id === rule.id ? { ...item, ...body.rule } : item))
-      toast.success(killSwitch ? 'Kill switch engaged' : mode === 'paused' ? 'Automation paused' : mode === 'dry_run' ? 'Dry-run mode enabled' : 'Automation is live')
+      toast.success(killSwitch ? 'Turned off' : mode === 'paused' ? 'Automation paused' : mode === 'dry_run' ? 'Dry-run mode enabled' : 'Automation is live')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Automation could not be updated')
     } finally {
@@ -159,20 +160,12 @@ export function AutomationsClient({ initialRules }: { initialRules: AutomationRu
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-md bg-muted p-2"><span className="block text-muted-foreground">Trigger</span>{rule.trigger_key.replaceAll('_', ' ')}</div>
-                        <div className="rounded-md bg-muted p-2"><span className="block text-muted-foreground">Action</span>{rule.action_key.replaceAll('_', ' ')}</div>
-                      </div>
-                      {rule.schedule_cron ? <p className="text-xs text-muted-foreground">Schedule: {rule.schedule_cron} {rule.schedule_timezone}</p> : null}
-                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <ShieldCheck className="h-3.5 w-3.5" /> {rule.approval_policy === 'required' ? 'Actions wait for approval' : 'Policy permits automatic preparation or internal execution'}
+                      <p className="text-sm">
+                        {describeAutomationSchedule(rule.schedule_cron, rule.schedule_timezone) ?? (rule.schedule_cron ? 'On a schedule' : 'Not on a schedule')}
                       </p>
-                      <div className="grid gap-2 rounded-md border p-2.5 text-xs sm:grid-cols-2">
-                        <div><span className="block text-muted-foreground">Next expected</span>{formatTime(rule.next_run_at)}</div>
-                        <div><span className="block text-muted-foreground">Pending approvals</span>{rule.pendingApprovals ?? 0}</div>
-                        <div><span className="block text-muted-foreground">Last success</span>{formatTime(rule.lastSuccess?.finished_at ?? rule.last_success_at)}</div>
-                        <div className={rule.lastFailure ? 'text-destructive' : ''}><span className="block text-muted-foreground">Last failure</span>{formatTime(rule.lastFailure?.finished_at ?? rule.last_failure_at)}</div>
-                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Last success {formatTime(rule.lastSuccess?.finished_at ?? rule.last_success_at)}
+                      </p>
                       {rule.lastFailure?.error_summary ? (
                         <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
                           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {rule.lastFailure.error_summary}
@@ -194,13 +187,28 @@ export function AutomationsClient({ initialRules }: { initialRules: AutomationRu
                         ) : null}
                         {!rule.kill_switch ? (
                           <Button size="sm" variant="destructive" onClick={() => void updateControl(rule, 'paused', true)} disabled={isBusy}>
-                            <ShieldAlert /> Kill switch
+                            <ShieldAlert /> Turn off
                           </Button>
                         ) : null}
                         <Button size="sm" variant="ghost" aria-expanded={expanded === rule.id} onClick={() => setExpanded(current => current === rule.id ? null : rule.id)}>
                           {expanded === rule.id ? <ChevronUp /> : <ChevronDown />} History
                         </Button>
                       </div>
+                      <details className="text-xs text-muted-foreground">
+                        <summary className="cursor-pointer">Technical details</summary>
+                        <div className="mt-2 space-y-2">
+                          {rule.schedule_cron ? <p>Schedule: {rule.schedule_cron} {rule.schedule_timezone}</p> : null}
+                          {rule.action_key === 'system_job' ? <p>system.job</p> : (
+                            <p>Action: {rule.action_key.replaceAll('_', ' ')}</p>
+                          )}
+                          <p className="flex items-center gap-1.5">
+                            <ShieldCheck className="h-3.5 w-3.5" /> {rule.approval_policy === 'required' ? 'Actions wait for approval' : 'Policy permits automatic preparation or internal execution'}
+                          </p>
+                          <p>Trigger: {rule.trigger_key.replaceAll('_', ' ')}</p>
+                          <p>Next expected {formatTime(rule.next_run_at)} · Pending approvals {rule.pendingApprovals ?? 0}</p>
+                          <p className={rule.lastFailure ? 'text-destructive' : ''}>Last failure {formatTime(rule.lastFailure?.finished_at ?? rule.last_failure_at)}</p>
+                        </div>
+                      </details>
                       {expanded === rule.id ? (
                         <div className="space-y-2 border-t pt-3">
                           {candidates ? (

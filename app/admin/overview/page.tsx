@@ -31,7 +31,7 @@ export default async function OverviewPage() {
     <PageHeader
       title="Firm dashboard"
       description="Open matters, lead follow-up, task pressure, and close-out across the firm."
-      actions={<Button asChild size="sm"><Link href="/admin">Open Today</Link></Button>}
+      actions={<Button asChild size="sm"><Link href="/admin">Open daily plan</Link></Button>}
     />
     <nav aria-label="Firm dashboard sections" className="flex gap-5 overflow-x-auto border-b border-border pb-3 text-sm">
       {sections.map(([id, label]) =>

@@ -75,6 +75,12 @@ export function StaffSettingsClient({
   const [saving, setSaving] = useState(false)
   const { confirm, confirmDialog } = useConfirm()
   const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({})
+  const [focusKeyProvider, setFocusKeyProvider] = useState<string | null>(null)
+  useEffect(() => {
+    if (tab !== 'api-keys' || !focusKeyProvider) return
+    document.getElementById(`api-key-${focusKeyProvider}`)?.focus()
+    setFocusKeyProvider(null)
+  }, [tab, focusKeyProvider])
   const [newConnector, setNewConnector] = useState({
     name: '',
     serverUrl: '',
@@ -392,9 +398,8 @@ export function StaffSettingsClient({
                 <p className="mt-2 text-xs">
                   {configured ? (
                     <span className="text-green">
-                      API key configured for {LLM_PROVIDER_LABELS[activeLlm.provider]} (
-                      {key?.source}
-                      {key?.hint ? ` · ${key.hint}` : ''})
+                      API key configured for {LLM_PROVIDER_LABELS[activeLlm.provider]}
+                      {key?.source === 'user' && key.hint ? ` (${key.hint})` : ''}
                     </span>
                   ) : (
                     <span className="text-amber">
@@ -437,9 +442,20 @@ export function StaffSettingsClient({
                         </span>
                       ) : null}
                     </Label>
-                    <span className="text-micro text-muted-foreground">
-                      {key?.configured ? 'Key configured' : 'Key missing'}
-                    </span>
+                    {key?.configured ? (
+                      <span className="text-micro text-muted-foreground">Key configured</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-micro text-primary underline hover:no-underline"
+                        onClick={() => {
+                          setFocusKeyProvider(provider)
+                          setTab('api-keys')
+                        }}
+                      >
+                        Key missing
+                      </button>
+                    )}
                   </div>
                   <select
                     id={`model-${provider}`}
@@ -479,7 +495,9 @@ export function StaffSettingsClient({
                   <p className="text-sm font-medium">{LLM_PROVIDER_LABELS[k.provider as LlmProvider] ?? k.provider}</p>
                   <p className="text-micro text-muted-foreground">
                     {k.configured
-                      ? `Configured (${k.source}${k.hint ? ` · ${k.hint}` : ''})`
+                      ? k.source === 'env'
+                        ? 'Configured from the server environment'
+                        : `Configured (${k.source}${k.hint ? ` · ${k.hint}` : ''})`
                       : 'Not configured'}
                   </p>
                 </div>
@@ -497,6 +515,7 @@ export function StaffSettingsClient({
               </div>
               <div className="flex gap-2">
                 <Input
+                  id={`api-key-${k.provider}`}
                   type="password"
                   placeholder={`Paste your ${LLM_PROVIDER_LABELS[k.provider as LlmProvider] ?? k.provider} API key`}
                   aria-label={`${LLM_PROVIDER_LABELS[k.provider as LlmProvider] ?? k.provider} API key`}
