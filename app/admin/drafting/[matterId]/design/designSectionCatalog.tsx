@@ -96,6 +96,7 @@ const DESIGN_SHEET_GROUP_CATALOG: Array<{
   { id: DESIGN_SHEET_GROUP_IDS.powersOfAttorney, title: 'Powers of attorney', subtitle: 'Financial authority and agent powers', tracks: ['estate', 'college_prep'], document: 'dpoa' },
   { id: DESIGN_SHEET_GROUP_IDS.healthcare, title: 'Health care', subtitle: 'Health care proxy, HIPAA, and directives', tracks: ['estate', 'college_prep'], document: 'healthcare' },
   { id: DESIGN_SHEET_GROUP_IDS.realProperty, title: 'Real property', subtitle: 'Transfers, assignments, and deed planning', tracks: ['estate'], document: 'deed' },
+  { id: DESIGN_SHEET_GROUP_IDS.assetSchedules, title: 'Asset schedules', subtitle: 'Property listed on the trust schedule', tracks: ['estate'], document: 'trust' },
   { id: DESIGN_SHEET_GROUP_IDS.trustProvisions, title: 'Trust provisions', subtitle: 'Restatement, marital trusts, and administrative provisions', tracks: ['estate'], document: 'trust' },
   { id: DESIGN_SHEET_GROUP_IDS.family, title: 'Last Will and Testament', subtitle: 'Will title and legacy will details', tracks: ['estate'], document: 'will' },
   { id: DESIGN_SHEET_GROUP_IDS.notes, title: 'Attorney notes', subtitle: 'Goals, concerns, and drafting notes', tracks: ['estate', 'college_prep'] },

@@ -77,6 +77,7 @@ export const DESIGN_SECTION_LABELS: Record<string, string> = {
   [DESIGN_SECTION_IDS.assetSchedules]: 'Asset Schedules',
   [DESIGN_SECTION_IDS.transfersAssignments]: 'Transfers & Assignments',
   [DESIGN_SECTION_IDS.attorneyNotes]: 'Attorney Notes',
+  [DESIGN_SECTION_IDS.signing]: 'Review & sign',
   // Legacy ids (deep links / preflight)
   'goals-notes': 'Attorney Notes',
   'plan-design': 'Estate Plan Design',
@@ -268,18 +269,24 @@ export function computeDesignSheetReadiness({
     // A College Preparation Plan has no trust-or-will structure to choose, so
     // plan type stays null there by design and must not read as missing.
     !collegePrep && !normalizedPlanType && blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'plan type', 'plan_type'),
-    documentInclusions.trust && married && sheet.is_joint == null &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'joint or separate trusts', 'is_joint'),
     Object.entries(documentInclusions).filter(([key, value]) => key !== 'spouse_docs' && value).length === 0 &&
       blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'at least one document', null),
+  ].filter(Boolean) as DesignReadinessBlocker[]
+
+  const jointTrustBlockers = [
+    documentInclusions.trust && married && sheet.is_joint == null &&
+      blocker(DESIGN_SECTION_IDS.trustDetails, 'joint or separate trusts', 'is_joint'),
+  ].filter(Boolean) as DesignReadinessBlocker[]
+
+  const signingBlockers = [
     (!hasText(signingType) || signingType === 'undecided') &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing type', 'signing_type', 'client-decision', false),
+      blocker(DESIGN_SECTION_IDS.signing, 'signing type', 'signing_type', 'client-decision', false),
     !hasText(sheet.signing_date) &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing date', 'signing_date', 'client-decision', false),
+      blocker(DESIGN_SECTION_IDS.signing, 'signing date', 'signing_date', 'client-decision', false),
     !hasText(sheet.signing_county) &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'signing county', 'signing_county', 'client-decision', false),
+      blocker(DESIGN_SECTION_IDS.signing, 'signing county', 'signing_county', 'client-decision', false),
     !hasText(sheet.notary_commission_expiration) &&
-      blocker(DESIGN_SECTION_IDS.estatePlanDesign, 'notary commission expiration', 'notary_commission_expiration', 'client-decision', false),
+      blocker(DESIGN_SECTION_IDS.signing, 'notary commission expiration', 'notary_commission_expiration', 'client-decision', false),
   ].filter(Boolean) as DesignReadinessBlocker[]
 
   const clientBlockers = [
@@ -445,7 +452,7 @@ export function computeDesignSheetReadiness({
     [DESIGN_SECTION_IDS.contactsFiduciaries]: summaryFromBlockers([], 'ready'),
     [DESIGN_SECTION_IDS.trustDetails]: !documentInclusions.trust
       ? { status: 'none', detail: 'not included' }
-      : summaryFromBlockers(provisionBlockers([...clientTrustBlockers, ...spouseTrustBlockers]), 'ready', countOverrides(sheet, [
+      : summaryFromBlockers(provisionBlockers([...jointTrustBlockers, ...clientTrustBlockers, ...spouseTrustBlockers]), 'ready', countOverrides(sheet, [
         'trust_name',
         'restatement',
         'trust_protector',
@@ -463,6 +470,7 @@ export function computeDesignSheetReadiness({
       ? { status: 'none', detail: 'not included' }
       : summaryFromBlockers(visibleOnLayout(provisionBlockers(healthcareBlockers)), 'ready'),
     [DESIGN_SECTION_IDS.assetSchedules]: optionalSummary(assetsFilled, `${assetList.length} asset${assetList.length === 1 ? '' : 's'}`),
+    [DESIGN_SECTION_IDS.signing]: summaryFromBlockers(signingBlockers, 'ready'),
     [DESIGN_SECTION_IDS.collegePlan]: summaryFromBlockers(collegePrepBlockers, 'ready'),
   }
 
@@ -492,7 +500,10 @@ export function computeDesignSheetReadiness({
     return status === 'complete' || status === 'override'
   }).length
 
-  const blockers = requiredIds.flatMap(key => sectionSummaries[key]?.blockers ?? [])
+  const blockers = [
+    ...requiredIds.flatMap(key => sectionSummaries[key]?.blockers ?? []),
+    ...signingBlockers,
+  ]
   const blocking = blockers.filter(item => item.blocking)
   const optional = blockers.filter(item => !item.blocking)
 

@@ -14,10 +14,13 @@ const pageSource = fs.readFileSync(
 
 describe('sectioned design sheet anchors', () => {
   it('maps legacy section navigation onto the stable group anchors', () => {
-    // Estate groups, the college-prep group, the essential-plan group, and trust provisions.
-    expect(Object.keys(DESIGN_SHEET_GROUP_IDS)).toHaveLength(13)
+    // Estate groups, the college-prep group, the essential-plan group, trust provisions, and asset schedules.
+    expect(Object.keys(DESIGN_SHEET_GROUP_IDS)).toHaveLength(14)
     expect(DESIGN_SHEET_GROUP_IDS.essentialPlan).toBe('essential-plan')
     expect(DESIGN_SHEET_GROUP_IDS.trustProvisions).toBe('trust-provisions')
+    expect(DESIGN_SHEET_GROUP_IDS.assetSchedules).toBe('asset-schedules')
+    expect(designSectionAnchorId(DESIGN_SECTION_IDS.assetSchedules)).toBe('asset-schedules')
+    expect(designSectionAnchorId(DESIGN_SECTION_IDS.signing)).toBe('review')
     expect(designSectionAnchorId(DESIGN_SECTION_IDS.trustDetails)).toBe('trust')
     expect(designSectionAnchorId('trust')).toBe('trust')
     expect(designSectionAnchorId(DESIGN_SECTION_IDS.clientInformation)).toBe('facts')

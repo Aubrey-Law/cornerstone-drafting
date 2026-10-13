@@ -58,6 +58,21 @@ describe('designTargetForMissingField', () => {
       .toBe(DESIGN_SECTION_IDS.transfersAssignments)
   })
 
+  it('maps signing fields to Review & sign and keeps client id on intake', () => {
+    expect(designTargetForMissingField('execution.signing_county')).toMatchObject({
+      sectionId: DESIGN_SECTION_IDS.signing,
+      sectionLabel: 'Review & sign',
+      targetField: 'signing_county',
+    })
+    expect(designTargetForMissingField('execution.signing_type')).toMatchObject({
+      sectionId: DESIGN_SECTION_IDS.signing,
+      targetField: 'signing_type',
+    })
+    expect(designTargetForMissingField('execution.notary_commission').sectionId).toBe(DESIGN_SECTION_IDS.signing)
+    expect(designTargetForMissingField('execution.notary_name').sectionId).toBe(DESIGN_SECTION_IDS.signing)
+    expect(designTargetForMissingField('execution.id_type').sectionId).toBe(DESIGN_SECTION_IDS.clientInformation)
+  })
+
   it('keeps the role in the label instead of collapsing every person to "Full Name"', () => {
     expect(designTargetForMissingField('fiduciaries.executor.co_primary.full_name').label)
       .toBe('Co-Executor / Co-Personal Representative')

@@ -25,6 +25,7 @@ const FULL_SHEET_ORDER = [
   'powers-of-attorney',
   'healthcare',
   'real-property',
+  'asset-schedules',
   'trust-provisions',
   'family',
   'notes',
@@ -61,6 +62,7 @@ describe('full design sheet interview order', () => {
 
     expect(ids).toContain('plan')
     expect(ids).toContain('real-property')
+    expect(ids).not.toContain('asset-schedules')
     expect(ids).not.toContain('trust')
     expect(ids).not.toContain('trust-provisions')
   })
