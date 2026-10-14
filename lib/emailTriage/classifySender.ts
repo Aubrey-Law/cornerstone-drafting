@@ -164,48 +164,76 @@ export interface AutomatedCheckArgs {
 /** Above this, one address is a system rather than a correspondent. */
 const HIGH_VOLUME_THREADS = 3
 
+export type AutomatedSenderVerdict = {
+  automated: boolean
+  hard: boolean
+  reason: string | null
+  /**
+   * True when the only hard signal is the attorney ignore list. Those rules
+   * silence strangers; they must not override a CRM match for a known
+   * client, lead, or contact (an accidental "Never this sender" or a vendor
+   * domain that also hosts a client's mailbox).
+   */
+  viaIgnoreList: boolean
+}
+
 /**
  * Whether this is machine-generated mail.
  *
- * `hard` means unambiguous — a mailing-list header, a `noreply` local part, an
- * autoresponder. Those beat everything, including a CRM match, because a
- * client's own out-of-office is still not a question.
+ * Protocol `hard` signals — a mailing-list header, a `noreply` local part, an
+ * autoresponder — beat everything, including a CRM match, because a client's
+ * own out-of-office is still not a question.
+ *
+ * Ignore-list hits are also `hard`, but `viaIgnoreList` is set so
+ * `classifySender` can prefer a CRM match first.
  *
  * Everything else needs **two** agreeing signals. One signal alone throws away
  * real people: a client whose mail Gmail happened to file under Updates, or a
  * prospect writing from `info@` at their own small business.
  */
-export function isAutomatedSender(args: AutomatedCheckArgs): {
-  automated: boolean
-  hard: boolean
-  reason: string | null
-} {
+export function isAutomatedSender(args: AutomatedCheckArgs): AutomatedSenderVerdict {
   const { headers, ignore } = args
   const email = args.email.toLowerCase()
   const domain = emailDomain(email)
   const local = emailLocalPart(email)
+  const none = { viaIgnoreList: false as const }
 
   if (headers['list-unsubscribe'] || headers['list-id'] || headers['list-post']) {
-    return { automated: true, hard: true, reason: 'mailing-list headers' }
+    return { automated: true, hard: true, reason: 'mailing-list headers', ...none }
   }
   if (/^(bulk|list|junk)$/i.test(headers.precedence ?? '')) {
-    return { automated: true, hard: true, reason: `Precedence: ${headers.precedence}` }
+    return { automated: true, hard: true, reason: `Precedence: ${headers.precedence}`, ...none }
   }
   if (headers['auto-submitted'] && !/^no$/i.test(headers['auto-submitted'])) {
-    return { automated: true, hard: true, reason: `Auto-Submitted: ${headers['auto-submitted']}` }
+    return {
+      automated: true,
+      hard: true,
+      reason: `Auto-Submitted: ${headers['auto-submitted']}`,
+      ...none,
+    }
   }
   if (HARD_AUTOMATED_LOCAL_PARTS.some(pattern => pattern.test(local))) {
-    return { automated: true, hard: true, reason: `sender is ${local}@` }
+    return { automated: true, hard: true, reason: `sender is ${local}@`, ...none }
   }
   if (AUTOMATED_SUBJECTS.test(args.subject ?? '')) {
-    return { automated: true, hard: true, reason: 'autoresponder subject' }
+    return { automated: true, hard: true, reason: 'autoresponder subject', ...none }
   }
   if (ignore.addresses.has(email)) {
-    return { automated: true, hard: true, reason: 'sender on the ignore list' }
+    return {
+      automated: true,
+      hard: true,
+      reason: 'sender on the ignore list',
+      viaIgnoreList: true,
+    }
   }
   const ignoredDomain = matchIgnoredDomain(domain, ignore.domains)
   if (ignoredDomain) {
-    return { automated: true, hard: true, reason: `${ignoredDomain} on the ignore list` }
+    return {
+      automated: true,
+      hard: true,
+      reason: `${ignoredDomain} on the ignore list`,
+      viaIgnoreList: true,
+    }
   }
 
   const soft: string[] = []
@@ -223,9 +251,9 @@ export function isAutomatedSender(args: AutomatedCheckArgs): {
   }
 
   if (soft.length >= 2) {
-    return { automated: true, hard: false, reason: soft.join(', ') }
+    return { automated: true, hard: false, reason: soft.join(', '), ...none }
   }
-  return { automated: false, hard: false, reason: null }
+  return { automated: false, hard: false, reason: null, ...none }
 }
 
 export interface ClassifySenderArgs extends AutomatedCheckArgs {
@@ -298,10 +326,15 @@ export function collectThreadParticipants(args: {
 /**
  * Resolve a sender to a Cornerstone record.
  *
- * The order is the whole design. Hard-automated wins outright; then the firm's
- * own records, *before* the soft heuristics, so a real client is never
- * suppressed because Gmail filed their mail under Updates; then soft-automated;
- * then a possible new lead.
+ * The order is the whole design:
+ * 1. Protocol hard-automated (OOO, noreply, list headers) — still not a question,
+ *    even from a client.
+ * 2. The firm's own records, before ignore-list and soft heuristics, so a real
+ *    client/lead is never filed as Noise because of an ignore rule or because
+ *    Gmail filed their mail under Updates.
+ * 3. Ignore-list hard-automated (strangers the attorney silenced).
+ * 4. Soft-automated (two weak signals).
+ * 5. Possible new lead.
  *
  * Client beats lead deliberately: a hired client still has the `client_intake`
  * row they arrived as, and would otherwise be filed as a lead forever.
@@ -322,7 +355,8 @@ export async function classifySender(
   }
 
   const automated = isAutomatedSender(args)
-  if (automated.automated && automated.hard) {
+  // Protocol hard signals only — ignore-list waits until after CRM lookup.
+  if (automated.automated && automated.hard && !automated.viaIgnoreList) {
     return {
       classification: 'automated',
       ...none,
@@ -343,6 +377,16 @@ export async function classifySender(
   if (participants.length === 1) {
     const viaThread = await lookupByAddress(admin, participants[0], args.name, participants[0])
     if (viaThread) return viaThread
+  }
+
+  if (automated.automated && automated.hard) {
+    return {
+      classification: 'automated',
+      ...none,
+      displayName: args.name,
+      reason: automated.reason ?? 'automated',
+      automatedHard: true,
+    }
   }
 
   if (automated.automated) {

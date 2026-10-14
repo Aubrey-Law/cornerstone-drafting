@@ -101,10 +101,23 @@ describe('isAutomatedSender — unambiguous cases', () => {
 
   it('honours the attorney’s own ignore list', () => {
     const ignore: IgnoreRules = { domains: new Set(['vendor.com']), addresses: new Set() }
-    expect(hard({ email: 'a@vendor.com', ignore })).toMatchObject({ hard: true })
+    expect(hard({ email: 'a@vendor.com', ignore })).toMatchObject({
+      hard: true,
+      viaIgnoreList: true,
+    })
 
     const byAddress: IgnoreRules = { domains: new Set(), addresses: new Set(['x@other.com']) }
-    expect(hard({ email: 'x@other.com', ignore: byAddress })).toMatchObject({ hard: true })
+    expect(hard({ email: 'x@other.com', ignore: byAddress })).toMatchObject({
+      hard: true,
+      viaIgnoreList: true,
+    })
+  })
+
+  it('marks protocol hard signals as not ignore-list hits', () => {
+    expect(hard({ headers: { 'list-unsubscribe': '<https://x>' } })).toMatchObject({
+      viaIgnoreList: false,
+    })
+    expect(hard({ subject: 'Out of Office' })).toMatchObject({ viaIgnoreList: false })
   })
 })
 
@@ -215,6 +228,44 @@ describe('classifySender', () => {
       labelIds: ['INBOX', 'CATEGORY_UPDATES'],
     })
     expect(match.classification).toBe('client')
+  })
+
+  it('keeps a known client even when their address is on the ignore list', async () => {
+    // "Never this sender" (or a domain rule) must not archive a hired client's
+    // real questions as Noise — CRM wins over ignore-list hard signals.
+    mocks.findMatterIdByEmail.mockResolvedValue('matter-1')
+    const match = await classifySender(adminStub(), {
+      ...BASE,
+      ignore: { domains: new Set(), addresses: new Set(['jane@example.com']) },
+    })
+    expect(match.classification).toBe('client')
+  })
+
+  it('keeps a known lead even when their domain is on the ignore list', async () => {
+    mocks.findLeadByEmail.mockResolvedValue({
+      id: 'lead-1',
+      lead_status: 'new',
+      full_name: 'Jane Doe',
+      first_name: 'Jane',
+      last_name: 'Doe',
+    })
+    const match = await classifySender(adminStub(), {
+      ...BASE,
+      ignore: { domains: new Set(['example.com']), addresses: new Set() },
+    })
+    expect(match.classification).toBe('lead')
+  })
+
+  it('still silences a stranger on the ignore list as Noise', async () => {
+    const match = await classifySender(adminStub(), {
+      ...BASE,
+      ignore: { domains: new Set(['example.com']), addresses: new Set() },
+    })
+    expect(match).toMatchObject({
+      classification: 'automated',
+      automatedHard: true,
+      reason: 'example.com on the ignore list',
+    })
   })
 
   it('drops a client’s own out-of-office, which is not a question', async () => {
