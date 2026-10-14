@@ -22,17 +22,16 @@ const FULL_SHEET_ORDER = [
   'fiduciaries',
   'plan',
   'trust',
+  'trust-provisions',
+  'asset-schedules',
+  'family',
   'powers-of-attorney',
   'healthcare',
   'real-property',
-  'asset-schedules',
-  'trust-provisions',
-  'family',
-  'notes',
 ]
 
 describe('full design sheet interview order', () => {
-  it('walks facts, fiduciaries, plan, then each document, with provisions after those decisions', () => {
+  it('walks intake, fiduciaries, plan, trust, schedules, will, then powers and health care', () => {
     expect(buildDesignSheetGroups([], 'estate', 'full').map(group => group.id)).toEqual(FULL_SHEET_ORDER)
     expect(buildDesignSheetGroups([], 'estate', 'full', inclusions()).map(group => group.id)).toEqual(FULL_SHEET_ORDER)
   })
@@ -47,11 +46,11 @@ describe('full design sheet interview order', () => {
       'facts',
       'fiduciaries',
       'plan',
+      'family',
       'powers-of-attorney',
       'healthcare',
-      'family',
-      'notes',
     ])
+    expect(ids).not.toContain('notes')
   })
 
   it('shows real property again when a deed document is on', () => {
@@ -74,7 +73,6 @@ describe('full design sheet interview order', () => {
       'fiduciaries',
       'powers-of-attorney',
       'healthcare',
-      'notes',
     ])
   })
 

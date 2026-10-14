@@ -430,8 +430,8 @@ describe('college prep design sheet — sections and readiness', () => {
       DESIGN_SECTION_IDS.collegePlan,
       DESIGN_SECTION_IDS.financialPoa,
       DESIGN_SECTION_IDS.healthcareDirectives,
-      DESIGN_SECTION_IDS.attorneyNotes,
     ])
+    expect(ids).not.toContain(DESIGN_SECTION_IDS.attorneyNotes)
   })
 
   it('keeps the estate section list untouched', () => {
@@ -460,8 +460,8 @@ describe('college prep design sheet — sections and readiness', () => {
       'fiduciaries',
       'powers-of-attorney',
       'healthcare',
-      'notes',
     ])
+    expect(collegeTabs).not.toContain('notes')
     // Without an inclusions argument the estate catalog still lists the trust tab.
     // Passing inclusions hides that group when the trust document is off.
     expect(estateTabs).toContain('trust')
