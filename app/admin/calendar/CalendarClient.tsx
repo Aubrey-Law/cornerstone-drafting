@@ -111,6 +111,8 @@ interface RescheduleDraft {
   label: string
   date: string
   time: string
+  /** Set when the meeting was booked outside Cornerstone. */
+  externalLabel: string | null
 }
 
 interface PlanBlockDraft {
@@ -540,7 +542,15 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
       label: `${a.typeLabel} — ${a.attendeeName}`,
       date: instantDayKey(a.startTime, timezone),
       time: zonedTimeInput(a.startTime, timezone),
+      externalLabel: externalSourceLabel(a.source),
     })
+  }
+
+  function removeExternalMeeting(appointment: CalendarAppointment) {
+    return patchAppointment(
+      { appointmentId: appointment.id, action: 'cancel' },
+      'Meeting removed from Cornerstone',
+    )
   }
 
   function openPlanBlock(deadline: PlanData['deadlines'][number]) {
@@ -704,14 +714,29 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                         </Link>
                       ) : null}
                     </div>
-                    {a.status === 'scheduled' && !isExternallyManagedSource(a.source) && (
+                    {a.status === 'scheduled' && (
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         {confirmingId === a.id ? (
                           <>
                             <span className="text-xs text-muted-foreground">
-                              {isPast ? 'Mark as no-show?' : 'Cancel this appointment? The client will be notified.'}
+                              {isExternallyManagedSource(a.source)
+                                ? `Remove this ${externalSourceLabel(a.source)} meeting from Cornerstone? The client is not emailed. If it is still booked there, the next import puts it back.`
+                                : isPast
+                                  ? 'Mark as no-show?'
+                                  : 'Cancel this appointment? The client will be notified.'}
                             </span>
-                            {isPast ? (
+                            {isExternallyManagedSource(a.source) ? (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={acting}
+                                onClick={() => {
+                                  void removeExternalMeeting(a).then(ok => ok && setConfirmingId(null))
+                                }}
+                              >
+                                Remove meeting
+                              </Button>
+                            ) : isPast ? (
                               <>
                                 <Button
                                   size="sm"
@@ -767,17 +792,22 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                                   size="sm"
                                   variant="outline"
                                   onClick={() => {
-                    beginReschedule(a)
+                                    beginReschedule(a)
                                   }}
                                 >
                                   Reschedule
                                 </Button>
                                 <Button size="sm" variant="ghost" onClick={() => setConfirmingId(a.id)}>
-                                  Cancel…
+                                  {isExternallyManagedSource(a.source) ? 'Remove…' : 'Cancel…'}
                                 </Button>
                               </>
                             )}
-                            {isPast && (
+                            {isPast && isExternallyManagedSource(a.source) && (
+                              <Button size="sm" variant="ghost" onClick={() => setConfirmingId(a.id)}>
+                                Remove…
+                              </Button>
+                            )}
+                            {isPast && !isExternallyManagedSource(a.source) && (
                               <Button size="sm" variant="ghost" onClick={() => setConfirmingId(a.id)}>
                                 Mark no-show…
                               </Button>
@@ -938,6 +968,7 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
               onDismissAttention={id => void dismissAttention(id)}
               onOpenAppointment={setSelectedAppointment}
               onReschedule={beginReschedule}
+              onRemove={appointment => { void removeExternalMeeting(appointment) }}
               onBookSlot={iso => openQuickBook(iso ? { iso } : { date: selectedDate })}
             />
             </div>
@@ -1049,6 +1080,11 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
         authHeaders={authHeaders}
         timezone={timezone}
         onReschedule={beginReschedule}
+        onRemove={async appointment => {
+          const ok = await removeExternalMeeting(appointment)
+          if (ok) setSelectedAppointment(null)
+          return ok
+        }}
         onAppointmentChanged={updated => {
           setSelectedAppointment(current => (current?.id === updated.id ? updated : current))
           setAppointments(rows => rows.map(row => (row.id === updated.id ? updated : row)))
@@ -1090,8 +1126,9 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Moves the calendar event and emails the client the new time. Any free
-                time works — client-facing hours and notice rules do not apply.
+                {reschedule.externalLabel
+                  ? `Updates this ${reschedule.externalLabel} meeting in Cornerstone and keeps its length. The client is not emailed. If ${reschedule.externalLabel} still has a different time, the next import restores it.`
+                  : 'Moves the calendar event and emails the client the new time. Any free time works — client-facing hours and notice rules do not apply.'}
               </p>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setReschedule(null)} disabled={acting}>
@@ -1111,7 +1148,9 @@ export function CalendarClient({ initialDay }: { initialDay?: string | null } = 
                         action: 'reschedule',
                         newStartIso: new Date(startMs).toISOString(),
                       },
-                      'Appointment rescheduled — client notified',
+                      reschedule.externalLabel
+                        ? 'Meeting time updated in Cornerstone'
+                        : 'Appointment rescheduled — client notified',
                     ).then(ok => ok && setReschedule(null))
                   }}
                 >

@@ -39,6 +39,7 @@ export function EventPrepDrawer({
   authHeaders,
   timezone = FIRM_TIMEZONE,
   onReschedule,
+  onRemove,
   onAppointmentChanged,
   onBookNext,
 }: {
@@ -48,12 +49,16 @@ export function EventPrepDrawer({
   authHeaders: () => HeadersInit | undefined
   timezone?: string
   onReschedule: (appointment: CalendarAppointment) => void
+  /** Remove a meeting that was booked outside Cornerstone. Resolves false when the request failed. */
+  onRemove?: (appointment: CalendarAppointment) => Promise<boolean> | boolean
   onAppointmentChanged?: (appointment: CalendarAppointment) => void
   onBookNext: (appointment: CalendarAppointment) => void
 }) {
   const [detail, setDetail] = useState<EventDetail | null>(null)
   const [detailStatus, setDetailStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [switchingTo, setSwitchingTo] = useState<VideoProvider | null>(null)
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
+  const [removing, setRemoving] = useState(false)
   const hasTeamsMeeting = appointment?.onlineMeetingProvider === 'microsoft_teams' && Boolean(appointment.onlineMeetingUrl)
   const hasGoogleMeet = Boolean(appointment?.onlineMeetingUrl) && !hasTeamsMeeting
   // Staff, not the client, pick the video service for a booked appointment;
@@ -99,10 +104,22 @@ export function EventPrepDrawer({
       setSwitchingTo(null)
     }
   }
+  async function removeMeeting() {
+    if (!appointment || !onRemove) return
+    setRemoving(true)
+    try {
+      const ok = await onRemove(appointment)
+      if (ok !== false) setConfirmingRemove(false)
+    } finally {
+      setRemoving(false)
+    }
+  }
+
   useEffect(() => {
     if (!open || !appointment) return
     setDetail(null)
     setDetailStatus('loading')
+    setConfirmingRemove(false)
     const controller = new AbortController()
     void fetch(`/api/admin/calendar/events/${appointment.id}`, {
       headers: authHeaders(),
@@ -161,9 +178,27 @@ export function EventPrepDrawer({
                   </Button>
                 )}
                 {isExternallyManagedSource(appointment.source) ? (
-                  <span className="rounded-full bg-card/80 px-2 py-1 text-micro font-medium text-foreground">
-                    Managed in {externalSourceLabel(appointment.source)}
-                  </span>
+                  <>
+                    <span className="rounded-full bg-card/80 px-2 py-1 text-micro font-medium text-foreground">
+                      Managed in {externalSourceLabel(appointment.source)}
+                    </span>
+                    {appointment.status === 'scheduled' && (
+                      <Button size="sm" variant="outline" onClick={() => onReschedule(appointment)}>Reschedule</Button>
+                    )}
+                    {appointment.status === 'scheduled' && onRemove && (
+                      confirmingRemove ? (
+                        <>
+                          <span className="text-micro text-foreground">Remove from Cornerstone? The client is not emailed.</span>
+                          <Button size="sm" variant="destructive" disabled={removing} onClick={() => void removeMeeting()}>
+                            {removing ? 'Removing…' : 'Remove meeting'}
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={removing} onClick={() => setConfirmingRemove(false)}>Keep</Button>
+                        </>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => setConfirmingRemove(true)}>Remove…</Button>
+                      )
+                    )}
+                  </>
                 ) : (
                   <Button size="sm" variant="outline" onClick={() => onReschedule(appointment)}>Reschedule</Button>
                 )}

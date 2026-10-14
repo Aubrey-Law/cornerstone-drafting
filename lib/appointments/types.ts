@@ -21,9 +21,10 @@ export type AppointmentStatus = 'scheduled' | 'cancelled' | 'rescheduled' | 'no_
 export type AppointmentSource = 'public' | 'portal' | 'admin' | 'calendly' | 'calcom' | 'lawmatics'
 
 /**
- * Sources whose appointments are read-only mirrors of a booking owned by an
- * external scheduler: rescheduling, cancelling, and outbound sync happen in
- * that scheduler, and its webhook updates the mirror.
+ * Schedulers outside Cornerstone. Outbound sync does not push these rows
+ * back, and their video link stays with that scheduler. Staff can still
+ * remove or reschedule the Cornerstone copy when the meeting changes;
+ * the next import from that scheduler wins if it still disagrees.
  */
 const EXTERNAL_SOURCE_LABELS: Partial<Record<string, string>> = {
   calendly: 'Calendly',
