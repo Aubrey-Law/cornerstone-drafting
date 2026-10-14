@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { TASK_COLUMNS } from '@/lib/queries/tasks'
 import { actorFrom, createNextOccurrence, logTaskActivity } from '@/lib/tasks/server'
 import type { ChecklistItem, TaskRow, TaskStatus } from '@/lib/tasks/types'
+import { invalidateWorkGraphCache } from '@/lib/work/requestCache'
 
 export function taskStatusStamps(
   status: TaskStatus,
@@ -41,6 +42,7 @@ export async function setTaskStatus(
   }
   const { data, error } = await admin.from('tasks').update(patch).eq('id', input.taskId).select(TASK_COLUMNS).single()
   if (error) throw new Error(error.message)
+  invalidateWorkGraphCache()
   const task = data as unknown as TaskRow
   let nextTask: TaskRow | null = null
   if (input.status === 'done' && existing.status !== 'done') {

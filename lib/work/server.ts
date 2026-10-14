@@ -26,6 +26,10 @@ import {
   type WorkPreferences,
 } from '@/lib/work/types'
 import { addCalendarBusyToToday } from '@/lib/work/calendarBusy'
+import { cachedRead } from '@/lib/work/requestCache'
+
+/** Long enough that moving between areas reuses one graph, short enough that a missed invalidation self-heals. */
+const WORK_GRAPH_TTL_MS = 20_000
 
 async function fetchDocumentReviewSources(): Promise<DocumentReviewSource[]> {
   const admin = getAdminClient()
@@ -134,9 +138,9 @@ async function timedSource<T>(
   }
 }
 
-export async function fetchWorkGraphForUser(
+async function loadWorkGraph(
   userId: string | null | undefined,
-  now: Date = new Date(),
+  now: Date,
   options: { horizonDays?: number } = {},
 ): Promise<WorkGraphResult> {
   const sourceErrors: string[] = []
@@ -250,4 +254,16 @@ export async function fetchWorkGraphForUser(
     }, now, { futureBusinessDays }),
     sourceDurationsMs,
   }
+}
+
+export async function fetchWorkGraphForUser(
+  userId: string | null | undefined,
+  now: Date = new Date(),
+  options: { horizonDays?: number } = {},
+): Promise<WorkGraphResult> {
+  // Default and an explicit 5-day horizon are not the same read: the default
+  // ranks three business days ahead, while a caller that names the horizon
+  // ranks that whole window. The key keeps them apart.
+  const key = `${userId ?? ''}:${options.horizonDays ?? 'default'}`
+  return cachedRead(key, WORK_GRAPH_TTL_MS, () => loadWorkGraph(userId, now, options))
 }

@@ -30,6 +30,7 @@ vi.mock('@/lib/work/plans', () => plans)
 
 import { adminChatToolset } from '@/lib/adminChat/toolset'
 import { READ_FIRM_TODAY_TOOL_NAME, firmTodaySystemPromptNote, firmTodayToolExecutor } from '@/lib/adminChat/firmTodayTool'
+import { invalidateWorkGraphCache } from '@/lib/work/requestCache'
 
 /**
  * "Plan my day" answered from the calendar and due tasks alone, while the
@@ -70,6 +71,9 @@ const ctx = () => {
 }
 
 beforeEach(() => {
+  // The work graph is cached for 20s in this process. A later case that
+  // rejects fetchTodayData must not be served the previous case's success.
+  invalidateWorkGraphCache()
   today.fetchTodayData.mockReset()
   today.fetchTodayData.mockResolvedValue(fixture())
   plans.fetchDailyPlan.mockReset()

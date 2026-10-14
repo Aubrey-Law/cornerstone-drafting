@@ -142,8 +142,34 @@ export async function fetchMatterAging(): Promise<{
 }
 
 export async function fetchMatterAgingTiles(): Promise<MatterAgingTiles> {
-  const { tiles } = await fetchMatterAging()
-  return tiles
+  const admin = getAdminClient()
+  // The sidebar and the firm dashboard only need the tile numbers. Downloading
+  // every aging row to count them made opening Overview wait on the whole board.
+  async function count(filters: {
+    health?: MatterAgingHealth
+    snoozed?: boolean
+    overdue?: boolean
+  } = {}): Promise<number> {
+    let query = admin.from('v_pipeline_aging').select('id', { count: 'exact', head: true })
+    if (filters.health) query = query.eq('health', filters.health)
+    if (filters.snoozed !== undefined) query = query.eq('is_snoozed', filters.snoozed)
+    if (filters.overdue !== undefined) query = query.eq('is_overdue', filters.overdue)
+    const { count: value, error } = await query
+    if (error) {
+      console.error('fetchMatterAgingTiles:', error.message)
+      throw new Error('Matter aging is unavailable. Please retry.')
+    }
+    return value ?? 0
+  }
+  const [active, red, amber, green, overdue, snoozed] = await Promise.all([
+    count(),
+    count({ health: 'red', snoozed: false }),
+    count({ health: 'amber', snoozed: false }),
+    count({ health: 'green', snoozed: false }),
+    count({ overdue: true, snoozed: false }),
+    count({ snoozed: true }),
+  ])
+  return { active, red, amber, green, overdue, snoozed }
 }
 
 export interface StageSlaRow {

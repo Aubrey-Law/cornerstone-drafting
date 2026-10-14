@@ -241,14 +241,25 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
       return { tasks: [] as TaskRow[], error: 'Tasks are unavailable. Please retry.' }
     })
 
-  const [aging, mattersRes, leadActionsRes, unreadRes, dueTaskResult, appointmentsRes, billing] = await Promise.all([
+  // One fetch of the matter list. The design-sheet pass starts as soon as those
+  // ids exist and overlaps aging, tasks, and billing instead of waiting for them.
+  const mattersPromise = admin
+    .from('v_matter_pipeline')
+    .select(PIPELINE_MATTER_COLUMNS)
+    .neq('status', 'archived')
+    .neq('stage', 'closed')
+    .order('matter_created', { ascending: false })
+    .then(result => result)
+  const lifecyclePromise = mattersPromise.then(result => {
+    if (result.error) return new Map<string, MatterLifecycleEvidence>()
+    return loadMatterLifecycleEvidenceBatch(
+      ((result.data ?? []) as PipelineMatter[]).map(matter => matter.matter_id),
+    )
+  })
+
+  const [aging, mattersRes, leadActionsRes, unreadRes, dueTaskResult, appointmentsRes, billing, lifecycleByMatter] = await Promise.all([
     fetchMatterAging(),
-    admin
-      .from('v_matter_pipeline')
-      .select(PIPELINE_MATTER_COLUMNS)
-      .neq('status', 'archived')
-      .neq('stage', 'closed')
-      .order('matter_created', { ascending: false }),
+    mattersPromise,
     admin
       .from('v_lead_list')
       .select(
@@ -271,6 +282,7 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
       .eq('status', 'scheduled')
       .order('start_time', { ascending: true }),
     fetchTodayBilling(admin, todayKey),
+    lifecyclePromise,
   ])
 
   if (mattersRes.error) throw new Error('Today matters are unavailable. Please retry.')
@@ -280,7 +292,6 @@ export async function fetchTodayData(options: FetchTodayDataOptions = {}): Promi
 
   const matters = (mattersRes.data ?? []) as PipelineMatter[]
   const matterById = new Map(matters.map(m => [m.matter_id, m]))
-  const lifecycleByMatter = await loadMatterLifecycleEvidenceBatch(matters.map(matter => matter.matter_id))
   const leadById = new Map(
     ((leadActionsRes.data ?? []) as unknown as LeadActionRow[]).map(lead => [lead.id, lead]),
   )

@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { isUuid } from '@/lib/queries/tasks'
 import type { WorkState } from '@/lib/work/types'
+import { invalidateWorkGraphCache } from '@/lib/work/requestCache'
 
 const STATES: WorkState[] = ['open', 'blocked', 'waiting', 'snoozed']
 
@@ -34,6 +35,7 @@ export async function PATCH(req: Request) {
     note,
   }, { onConflict: 'user_id,work_key' }).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  invalidateWorkGraphCache()
   return NextResponse.json({ override: data })
 }
 
@@ -47,5 +49,6 @@ export async function DELETE(req: Request) {
   const { error } = await getAdminClient().from('work_item_overrides').delete()
     .eq('user_id', auth.userId).eq('work_key', workKey)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  invalidateWorkGraphCache()
   return new NextResponse(null, { status: 204 })
 }
