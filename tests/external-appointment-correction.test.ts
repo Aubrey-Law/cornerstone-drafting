@@ -46,7 +46,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
       chain.eq = (key: string, value: unknown) => { filters.push([key, value]); return chain }
       chain.maybeSingle = async () => {
         const { data, error } = run()
-        return { data: data[0] ?? null, error }
+        return { data: data?.[0] ?? null, error }
       }
       chain.then = (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
         Promise.resolve(run()).then(resolve, reject)
