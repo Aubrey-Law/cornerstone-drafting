@@ -523,7 +523,7 @@ export function PlanDesignSection({
             <AssetTransferDocumentsFields sheet={sheet} onChange={onChange} />
           </div>
 
-          <PlanStructureFactsSection sheet={sheet} onChange={onChange} />
+          <PlanStructureFactsSection sheet={sheet} onChange={onChange} includeAssets={false} />
         </div>
       </SectionBlock>
     </DesignSectionContent>

@@ -25,6 +25,7 @@ const FULL_SHEET_ORDER = [
   'powers-of-attorney',
   'healthcare',
   'real-property',
+  'asset-schedules',
   'trust-provisions',
   'family',
   'notes',
@@ -61,6 +62,7 @@ describe('full design sheet interview order', () => {
 
     expect(ids).toContain('plan')
     expect(ids).toContain('real-property')
+    expect(ids).not.toContain('asset-schedules')
     expect(ids).not.toContain('trust')
     expect(ids).not.toContain('trust-provisions')
   })
@@ -91,6 +93,12 @@ describe('full design sheet interview order', () => {
       'utf8',
     )
 
+    expect(catalog).toContain("title: 'Asset schedules'")
+    const plan = fs.readFileSync(
+      path.join(process.cwd(), 'app/admin/drafting/[matterId]/design/sections/PlanDesignSection.tsx'),
+      'utf8',
+    )
+    expect(plan).toContain('<PlanStructureFactsSection sheet={sheet} onChange={onChange} includeAssets={false} />')
     expect(catalog).toContain('<TrustDetailsSection {...docCommon} variant="plan" />')
     expect(catalog).toContain('<TrustDetailsSection {...docCommon} variant="provisions" />')
     expect(trust).toContain("essential ? 'Joint Trust' : 'Trust Structure'")

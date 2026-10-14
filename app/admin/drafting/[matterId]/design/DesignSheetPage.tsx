@@ -107,6 +107,18 @@ export interface DesignSheetPageProps {
   designState?: DesignSheetState
 }
 
+const SIGNING_FOCUS_FIELDS = new Set([
+  'signing_type',
+  'signing_date',
+  'signing_county',
+  'notary_commission_expiration',
+])
+
+function focusesSigningField(targetField: string | null | undefined): boolean {
+  if (!targetField) return false
+  return SIGNING_FOCUS_FIELDS.has(targetField) || targetField.startsWith('execution_mechanics.')
+}
+
 /** Final section: signing mechanics + drafting review. Synthetic — not in the section catalog. */
 const REVIEW_GROUP = {
   id: DESIGN_SHEET_GROUP_IDS.review,
@@ -203,6 +215,8 @@ function DesignSheetPageContent({
   // transient and always starts closed so the form is what you land on.
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [revealSigning, setRevealSigning] = useState(false)
+  const [signingFocusField, setSigningFocusField] = useState<string | null>(null)
   // `null` falls back to the first visible group. Seeded from the URL hash so
   // deep links (matter overview "fix this", copied URLs) land on their section.
   const [activeGroupId, setActiveGroupId] = useState<DesignSheetGroupId | null>(() =>
@@ -352,14 +366,14 @@ function DesignSheetPageContent({
     void savePreferences({ drafting: { designNavCollapsed: !open } })
   }, [isMobile, savePreferences])
 
-  const groupReadiness = useMemo(() => new Map(groups.map(group => {
+  const groupReadiness = useMemo(() => new Map([...groups.map(group => group.id), REVIEW_GROUP.id].map(groupId => {
     const blocking = blockingDetails
-      .filter(detail => designGroupForLayout(detail.id, layout) === group.id)
+      .filter(detail => designGroupForLayout(detail.id, layout) === groupId)
       .flatMap(detail => detail.blockers)
     const optional = state.optionalDetails
-      .filter(detail => designGroupForLayout(detail.id, layout) === group.id)
+      .filter(detail => designGroupForLayout(detail.id, layout) === groupId)
       .flatMap(detail => detail.blockers)
-    return [group.id, { blocking, optional }] as const
+    return [groupId, { blocking, optional }] as const
   })), [blockingDetails, groups, layout, state.optionalDetails])
 
   const navGroups = useMemo(() => [
@@ -377,10 +391,10 @@ function DesignSheetPageContent({
     {
       id: REVIEW_GROUP.id,
       title: REVIEW_GROUP.title,
-      blockingCount: 0,
-      optionalCount: 0,
-      blockingLabels: [],
-      optionalLabels: [],
+      blockingCount: groupReadiness.get(REVIEW_GROUP.id)?.blocking.length ?? 0,
+      optionalCount: groupReadiness.get(REVIEW_GROUP.id)?.optional.length ?? 0,
+      blockingLabels: groupReadiness.get(REVIEW_GROUP.id)?.blocking.map(item => item.label) ?? [],
+      optionalLabels: groupReadiness.get(REVIEW_GROUP.id)?.optional.map(item => item.label) ?? [],
     },
   ], [groupReadiness, groups])
 
@@ -419,7 +433,12 @@ function DesignSheetPageContent({
     groupId: DesignSheetGroupId,
     options: { targetField?: string | null } = {},
   ) => {
+    const signingField = groupId === REVIEW_GROUP.id && focusesSigningField(options.targetField)
+      ? options.targetField ?? null
+      : null
     setActiveGroupId(groupId)
+    setRevealSigning(signingField != null)
+    setSigningFocusField(signingField)
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${groupId}`)
     const targetField = options.targetField ?? null
     window.requestAnimationFrame(() => {
@@ -474,7 +493,12 @@ function DesignSheetPageContent({
     const groupId = designGroupForLayout(normalizedSectionId, layout)
     if (!groupId) return
     appliedInitialFocusRef.current = initialFocus
+    const signingField = groupId === REVIEW_GROUP.id && focusesSigningField(initialFocus.targetField)
+      ? initialFocus.targetField
+      : null
     setActiveGroupId(groupId)
+    setRevealSigning(signingField != null)
+    setSigningFocusField(signingField)
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const targetId = initialFocus.targetField ? designFieldTargetId(initialFocus.targetField) : null
@@ -489,6 +513,15 @@ function DesignSheetPageContent({
       })
     })
   }, [initialFocus, layout, setContainerScrollTop])
+
+  useLayoutEffect(() => {
+    if (!revealSigning || !signingFocusField) return
+    const target = document.getElementById(designFieldTargetId(signingFocusField))
+    if (!(target instanceof HTMLElement)) return
+    setContainerScrollTop(target)
+    target.focus({ preventScroll: true })
+    flashDesignTarget(target)
+  }, [revealSigning, setContainerScrollTop, signingFocusField])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -797,7 +830,7 @@ function DesignSheetPageContent({
                   </GroupCard>
                 ) : (
                   <>
-                    <SigningMechanicsSection sheet={sheet} onChange={updateField} />
+                    <SigningMechanicsSection sheet={sheet} onChange={updateField} initialOpen={revealSigning} />
                     <DesignFinalReview
                       sheet={sheet}
                       selectedDocKeys={selectedDocKeys}

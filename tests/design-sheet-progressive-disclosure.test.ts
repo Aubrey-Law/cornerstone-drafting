@@ -67,9 +67,10 @@ describe('design-sheet progressive disclosure', () => {
     const plan = read('app/admin/drafting/[matterId]/design/sections/PlanDesignSection.tsx')
     const signing = read('app/admin/drafting/[matterId]/design/sections/SigningMechanicsSection.tsx')
 
-    expect(page).toContain('<SigningMechanicsSection sheet={sheet} onChange={updateField} />')
+    expect(page).toContain('<SigningMechanicsSection sheet={sheet} onChange={updateField} initialOpen={revealSigning} />')
     expect(plan).not.toContain('fieldName="signing_county"')
-    expect(signing).toContain('useState(false)')
+    expect(signing).toContain('useState(initialOpen)')
+    expect(signing).toContain('initialOpen = false')
     expect(signing).toContain('Completed at the signing meeting')
     expect(signing).toContain('this never blocks drafting')
   })

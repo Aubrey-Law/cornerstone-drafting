@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { toDateInputValue } from '@/lib/dob'
@@ -64,8 +64,15 @@ export function SigningTypeDecision({ sheet, onChange }: SectionProps) {
   )
 }
 
-export function SigningMechanicsSection({ sheet, onChange }: SectionProps) {
-  const [open, setOpen] = useState(false)
+export function SigningMechanicsSection({
+  sheet,
+  onChange,
+  initialOpen = false,
+}: SectionProps & { initialOpen?: boolean }) {
+  const [open, setOpen] = useState(initialOpen)
+  useEffect(() => {
+    if (initialOpen) setOpen(true)
+  }, [initialOpen])
   const execution = getExecutionMechanics(sheet)
 
   const updateExecution = (patch: Parameters<typeof setExecutionMechanics>[1]) => {

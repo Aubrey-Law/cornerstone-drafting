@@ -4,6 +4,7 @@ import path from 'node:path'
 import { computeDesignSheetReadiness, parseDesignFocusParam } from '@/lib/designSheetReadiness'
 import { MATTER_TYPE_REQUIRED_MESSAGE } from '@/lib/matter/matterType'
 import { setDesignPlanTrack } from '@/lib/collegePrepDesign'
+import { designGroupForLayout } from '@/lib/designSheet/designSectionNav'
 import { DESIGN_SECTION_IDS } from '@/lib/designSheet/sectionIds'
 import type { DesignSheet, PipelineMatter } from '@/types/database'
 
@@ -443,6 +444,37 @@ describe('computeDesignSheetReadiness', () => {
 
     expect(readiness.optional.find(item => item.label === 'signing date')?.blocking).toBe(false)
     expect(readiness.blocking.map(item => item.label)).not.toContain('signing date')
+  })
+
+  it('sends joint or separate trusts to the Trust section', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({ matter_type: 'couple', is_joint: null, spouse_name: 'Alex Doe' }),
+      matter: makeMatter({ spouse_name: 'Alex Doe' }),
+      isLP: false,
+      lpData: null,
+    })
+
+    const item = readiness.blocking.find(entry => entry.label === 'joint or separate trusts')
+    expect(item?.sectionId).toBe(DESIGN_SECTION_IDS.trustDetails)
+    expect(item?.targetField).toBe('is_joint')
+    expect(designGroupForLayout(item?.sectionId, 'full')).toBe('trust')
+    expect(designGroupForLayout(item?.sectionId, 'essential')).toBe('essential-plan')
+  })
+
+  it('sends signing decisions to Review & sign', () => {
+    const readiness = computeDesignSheetReadiness({
+      sheet: makeSheet({ signing_date: null }),
+      matter: makeMatter(),
+      isLP: false,
+      lpData: null,
+    })
+
+    for (const label of ['signing type', 'signing date', 'signing county', 'notary commission expiration']) {
+      const item = readiness.optional.find(entry => entry.label === label)
+      expect(item?.sectionId).toBe(DESIGN_SECTION_IDS.signing)
+      expect(designGroupForLayout(item?.sectionId, 'full')).toBe('review')
+      expect(designGroupForLayout(item?.sectionId, 'essential')).toBe('review')
+    }
   })
 })
 

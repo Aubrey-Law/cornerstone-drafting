@@ -41,8 +41,9 @@ const EXACT: Record<string, Entry> = {
   'client.pronoun_subject': { label: 'Pronouns', sectionId: S.clientInformation, targetField: 'client_pronouns' },
   'client.pronoun_possessive': { label: 'Pronouns', sectionId: S.clientInformation, targetField: 'client_pronouns' },
 
-  'execution.signing_county': { label: 'Signing county', sectionId: S.estatePlanDesign, targetField: 'signing_county' },
-  'execution.notary_commission': { label: 'Notary commission expiration', sectionId: S.estatePlanDesign, targetField: 'notary_commission_expiration' },
+  'execution.signing_type': { label: 'Signing type', sectionId: S.signing, targetField: 'signing_type' },
+  'execution.signing_county': { label: 'Signing county', sectionId: S.signing, targetField: 'signing_county' },
+  'execution.notary_commission': { label: 'Notary commission expiration', sectionId: S.signing, targetField: 'notary_commission_expiration' },
   'execution.id_type': { label: 'Client ID type', sectionId: S.clientInformation, targetField: null },
 
   'spouse.full_name': { label: 'Spouse legal name', sectionId: S.clientInformation, targetField: 'spouse_name' },
@@ -144,7 +145,7 @@ const PREFIXES: Array<[string, string]> = [
   ['will.', S.willDetails],
   ['trust.', S.trustDetails],
   ['client.', S.clientInformation],
-  ['execution.', S.estatePlanDesign],
+  ['execution.', S.signing],
   ['spouse.', S.clientInformation],
   ['children', S.clientInformation],
   ['young_adult.', S.estatePlanDesign],

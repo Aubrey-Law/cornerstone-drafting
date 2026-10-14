@@ -25,7 +25,7 @@ function newAssetTitle() {
 }
 
 interface PlanStructureFactsSectionProps extends SectionProps {
-  /** The full sheet keeps the asset inventory under these facts. The essential sheet leaves it off. */
+  /** Asset schedules are their own full-sheet step, so this inventory stays off unless a caller opts in. */
   includeAssets?: boolean
   /** Placement note that only makes sense inside the full Estate Plan Details section. */
   showPlacementNote?: boolean
@@ -34,7 +34,7 @@ interface PlanStructureFactsSectionProps extends SectionProps {
 export function PlanStructureFactsSection({
   sheet,
   onChange,
-  includeAssets = true,
+  includeAssets = false,
   showPlacementNote = true,
 }: PlanStructureFactsSectionProps) {
   const children = sheet.children ?? []
