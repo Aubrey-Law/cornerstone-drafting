@@ -44,6 +44,8 @@ export interface EmailTriageRow {
   client_intake_id: string | null
   matter_id: string | null
   contact_id: string | null
+  /** Attorney linked this row in Mail Desk; scan must keep the CRM keys. */
+  record_linked_manually: boolean
   status: TriageStatus
   draft_subject: string | null
   draft_body: string | null
@@ -76,9 +78,9 @@ export interface TriageScanRow {
 const ROW_COLUMNS =
   'id, gmail_thread_id, gmail_message_id, sender_email, sender_name, subject, snippet, '
   + 'received_at, classification, classification_reason, client_intake_id, matter_id, '
-  + 'contact_id, status, draft_subject, draft_body, draft_error, gmail_draft_id, '
-  + 'gmail_draft_message_id, human_draft_at, snoozed_until, follow_up_at, follow_up_note, '
-  + 'claimed_by, thread_note, gmail_sorted_at, gmail_sort_label'
+  + 'contact_id, record_linked_manually, status, draft_subject, draft_body, draft_error, '
+  + 'gmail_draft_id, gmail_draft_message_id, human_draft_at, snoozed_until, follow_up_at, '
+  + 'follow_up_note, claimed_by, thread_note, gmail_sorted_at, gmail_sort_label'
 
 const OPEN_STATUSES = ['needs_reply', 'drafting', 'drafted', 'failed', 'approved'] as const
 

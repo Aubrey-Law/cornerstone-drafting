@@ -60,14 +60,25 @@ describe('the triage cron', () => {
 describe('the triage routes', () => {
   const routes = [
     'app/api/admin/email-triage/route.ts',
+    'app/api/admin/email-triage/records/route.ts',
     'app/api/admin/email-triage/scan/route.ts',
     'app/api/admin/email-triage/[id]/route.ts',
+    'app/api/admin/email-triage/[id]/link/route.ts',
     'app/api/admin/email-triage/[id]/draft/route.ts',
     'app/api/admin/email-triage/[id]/approve/route.ts',
     'app/api/admin/email-triage/[id]/send/route.ts',
     'app/api/admin/email-triage/[id]/dismiss/route.ts',
     'app/api/admin/email-triage/[id]/message/route.ts',
   ]
+
+  it('keeps a manual CRM link across scans', () => {
+    const link = source('app/api/admin/email-triage/[id]/link/route.ts')
+    expect(link).toContain('record_linked_manually')
+    expect(link).toContain('resolveEmailTriageLink')
+    const scan = source('lib/emailTriage/scan.ts')
+    expect(scan).toContain('applyManualLinkOnScan')
+    expect(scan).toContain('record_linked_manually')
+  })
 
   it('all require an admin', () => {
     for (const route of routes) expect(source(route)).toContain('requireAdmin')

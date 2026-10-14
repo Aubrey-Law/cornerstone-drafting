@@ -39,13 +39,13 @@ export async function GET(req: NextRequest) {
   const [intakes, contacts] = await Promise.all([
     admin
       .from('client_intake')
-      .select('id, full_name, first_name, last_name, phone, matter_id, lead_status')
+      .select('id, full_name, first_name, last_name, email, phone, matter_id, lead_status')
       .or(`full_name.ilike.${like},first_name.ilike.${like},last_name.ilike.${like},email.ilike.${like}${phoneLike}`)
       .order('created_at', { ascending: false })
       .limit(LIMIT * 2),
     admin
       .from('contacts')
-      .select('id, first_name, last_name, preferred_name, phone')
+      .select('id, first_name, last_name, preferred_name, email, phone')
       .is('merged_into_id', null)
       .or(`first_name.ilike.${like},last_name.ilike.${like},preferred_name.ilike.${like},email.ilike.${like}${phoneLike}`)
       .limit(LIMIT),
@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
     : { data: [] as Array<{ id: string; relationship_status: string | null }> }
   const statusById = new Map((matters ?? []).map(m => [m.id, m.relationship_status ?? 'hired']))
 
+  const termLower = term.toLowerCase()
   const phoneMatches = (phone: string | null) =>
     digits.length < 4 || (optOutPhoneKey(phone) ?? '').includes(digits.slice(-10))
 
@@ -70,8 +71,12 @@ export async function GET(req: NextRequest) {
   for (const row of intakes.data ?? []) {
     if (!row.lead_status && !row.matter_id) continue
     const name = row.full_name?.trim() || [row.first_name, row.last_name].filter(Boolean).join(' ').trim()
-    const nameHit = name.toLowerCase().includes(term.toLowerCase())
-    if (!nameHit && !phoneMatches(row.phone)) continue
+    const email = typeof row.email === 'string' ? row.email.toLowerCase() : ''
+    const nameHit = name.toLowerCase().includes(termLower)
+    const emailHit = Boolean(email && email.includes(termLower))
+    // Keep email-only hits: the OR query already matched email, and dropping
+    // them here made "link by email" useless for Texts and Mail Desk.
+    if (!nameHit && !emailHit && !phoneMatches(row.phone)) continue
     const hired = row.matter_id && statusById.get(row.matter_id) === 'hired'
     recipients.push({
       kind: hired ? 'client' : 'lead',
@@ -86,6 +91,10 @@ export async function GET(req: NextRequest) {
     const name = [row.preferred_name?.trim() || row.first_name?.trim(), row.last_name?.trim()]
       .filter(Boolean)
       .join(' ')
+    const email = typeof row.email === 'string' ? row.email.toLowerCase() : ''
+    const nameHit = name.toLowerCase().includes(termLower)
+    const emailHit = Boolean(email && email.includes(termLower))
+    if (!nameHit && !emailHit && !phoneMatches(row.phone)) continue
     recipients.push({
       kind: 'contact',
       name: name || 'Unnamed contact',

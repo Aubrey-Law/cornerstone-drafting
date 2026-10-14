@@ -73,6 +73,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       client_intake_id: lead.leadId,
       classification: 'lead',
       classification_reason: 'Created from Mail Desk',
+      record_linked_manually: true,
       updated_at: now,
     })
     .eq('id', id)

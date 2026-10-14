@@ -7,6 +7,7 @@ import {
   Clock,
   ExternalLink,
   FileText,
+  Link2,
   ListTodo,
   Loader2,
   MailCheck,
@@ -16,6 +17,7 @@ import {
   Send,
   Sparkles,
   Trash2,
+  Unlink,
   UserCheck,
   UserPlus,
 } from 'lucide-react'
@@ -25,9 +27,17 @@ import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useConfirm } from '@/components/useConfirm'
+import type { MailDeskRecordHit } from '@/app/api/admin/email-triage/records/route'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { DEFAULT_REPLY_SLA_HOURS } from '@/lib/comms/thread'
 import { formatBytes } from '@/lib/email/formatBytes'
@@ -123,6 +133,10 @@ function recordHref(row: EmailTriageRow): string | null {
   if (row.matter_id && row.classification === 'client') return `/admin/matters/${row.matter_id}`
   if (row.client_intake_id) return `/admin/crm/opportunities/${row.client_intake_id}`
   return null
+}
+
+function isLinkedToRecord(row: EmailTriageRow): boolean {
+  return Boolean(row.matter_id || row.client_intake_id)
 }
 
 function gmailThreadUrl(threadId: string): string {
@@ -497,6 +511,66 @@ export function EmailTriageClient({
     }
   }, [authHeaders, confirm, reload, selected])
 
+  const linkSelected = useCallback(async (hit: MailDeskRecordHit) => {
+    if (!selected) return false
+    setBusy(selected.id)
+    try {
+      const res = await fetch(`/api/admin/email-triage/${selected.id}/link`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: hit.leadId, matterId: hit.matterId }),
+      })
+      const body = await res.json().catch(() => ({})) as {
+        error?: string
+        row?: EmailTriageRow
+      }
+      if (!res.ok) {
+        toast.error(body.error ?? 'Could not link this thread')
+        return false
+      }
+      if (body.row) {
+        setRows(current => current.map(item => (item.id === body.row!.id ? body.row! : item)))
+      }
+      toast.success(`Linked to ${hit.name}`)
+      return true
+    } finally {
+      setBusy(null)
+    }
+  }, [authHeaders, selected])
+
+  const unlinkSelected = useCallback(async () => {
+    if (!selected) return false
+    const confirmed = await confirm({
+      title: 'Unlink this thread from its record?',
+      body: 'It goes back to Possible leads. The next scan can re-classify the sender.',
+      confirmLabel: 'Unlink',
+    })
+    if (!confirmed) return false
+    setBusy(selected.id)
+    try {
+      const res = await fetch(`/api/admin/email-triage/${selected.id}/link`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unlink: true }),
+      })
+      const body = await res.json().catch(() => ({})) as {
+        error?: string
+        row?: EmailTriageRow
+      }
+      if (!res.ok) {
+        toast.error(body.error ?? 'Could not unlink this thread')
+        return false
+      }
+      if (body.row) {
+        setRows(current => current.map(item => (item.id === body.row!.id ? body.row! : item)))
+      }
+      toast.success('Unlinked from record')
+      return true
+    } finally {
+      setBusy(null)
+    }
+  }, [authHeaders, confirm, selected])
+
   // Sends exactly what the editor shows — the subject and body travel with the
   // request, so an edit the autosave has not reached yet is the one that goes.
   const sendSelected = useCallback(async () => {
@@ -794,6 +868,9 @@ export function EmailTriageClient({
                   onCreateTask={createTaskSelected}
                   onClaim={claimSelected}
                   onCreateLead={createLeadSelected}
+                  onLink={linkSelected}
+                  onUnlink={unlinkSelected}
+                  authHeaders={authHeaders}
                   currentUserId={currentUserId}
                 />
               )
@@ -914,6 +991,9 @@ function DraftPane({
   onCreateTask,
   onClaim,
   onCreateLead,
+  onLink,
+  onUnlink,
+  authHeaders,
   currentUserId,
 }: {
   row: EmailTriageRow
@@ -934,9 +1014,13 @@ function DraftPane({
   onCreateTask: () => Promise<boolean>
   onClaim: (claim: boolean) => Promise<boolean>
   onCreateLead: () => Promise<boolean>
+  onLink: (hit: MailDeskRecordHit) => Promise<boolean>
+  onUnlink: () => Promise<boolean>
+  authHeaders: () => HeadersInit
   currentUserId: string
 }) {
   const href = recordHref(row)
+  const linked = isLinkedToRecord(row)
   const hasDraft = Boolean(row.draft_body?.trim())
   const dirty = useRef(false)
   const noteDirty = useRef(false)
@@ -945,6 +1029,7 @@ function DraftPane({
   const claimedByMe = Boolean(row.claimed_by && row.claimed_by === currentUserId)
   const [customSnooze, setCustomSnooze] = useState('')
   const [customFollowUp, setCustomFollowUp] = useState('')
+  const [linkOpen, setLinkOpen] = useState(false)
 
   // Autosave. The attorney edits and clicks away; losing the edit because it
   // was never explicitly saved would be worse than an occasional extra write.
@@ -992,10 +1077,15 @@ function DraftPane({
           {row.sender_name ? `${row.sender_name} · ` : ''}{row.sender_email}
           {row.classification_reason ? ` · ${row.classification_reason}` : ''}
         </p>
-        {href && (
+        {href ? (
           <Link href={href} className="mt-1 inline-block text-xs font-medium underline underline-offset-2">
             Open the Cornerstone record
+            {row.record_linked_manually ? ' (linked here)' : ''}
           </Link>
+        ) : (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Not linked to a lead or matter.
+          </p>
         )}
         {(row.gmail_sort_label || snoozed || row.follow_up_at) && (
           <p className="mt-2 text-xs text-muted-foreground">
@@ -1114,6 +1204,17 @@ function DraftPane({
           <Button size="sm" variant="ghost" onClick={() => void onCreateLead()} disabled={busy}>
             <UserPlus className="mr-1.5 size-3.5" />
             Create lead
+          </Button>
+        )}
+        {linked ? (
+          <Button size="sm" variant="ghost" onClick={() => void onUnlink()} disabled={busy}>
+            <Unlink className="mr-1.5 size-3.5" />
+            Unlink record
+          </Button>
+        ) : (
+          <Button size="sm" variant="ghost" onClick={() => setLinkOpen(true)} disabled={busy}>
+            <Link2 className="mr-1.5 size-3.5" />
+            Link to record
           </Button>
         )}
         {claimedByMe ? (
@@ -1248,7 +1349,114 @@ function DraftPane({
           {appliedLabel(row) && <> Labeled <span className="font-medium">{appliedLabel(row)}</span>.</>}
         </p>
       )}
+
+      <LinkRecordDialog
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        senderLabel={row.sender_name || row.sender_email}
+        authHeaders={authHeaders}
+        onPick={async hit => {
+          const ok = await onLink(hit)
+          if (ok) setLinkOpen(false)
+        }}
+      />
     </div>
+  )
+}
+
+function LinkRecordDialog({
+  open,
+  onOpenChange,
+  senderLabel,
+  authHeaders,
+  onPick,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  senderLabel: string
+  authHeaders: () => HeadersInit
+  onPick: (hit: MailDeskRecordHit) => void | Promise<void>
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<MailDeskRecordHit[]>([])
+  const [searching, setSearching] = useState(false)
+
+  useEffect(() => {
+    if (!open) {
+      setQuery('')
+      setResults([])
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open || query.trim().length < 2) {
+      setResults([])
+      return
+    }
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      setSearching(true)
+      try {
+        const res = await fetch(
+          `/api/admin/email-triage/records?q=${encodeURIComponent(query.trim())}`,
+          { headers: authHeaders(), signal: controller.signal },
+        )
+        const body = await res.json().catch(() => ({})) as { records?: MailDeskRecordHit[] }
+        if (!controller.signal.aborted) setResults(body.records ?? [])
+      } catch {
+        if (!controller.signal.aborted) setResults([])
+      } finally {
+        if (!controller.signal.aborted) setSearching(false)
+      }
+    }, 250)
+    return () => {
+      controller.abort()
+      window.clearTimeout(timer)
+    }
+  }, [query, open, authHeaders])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Link to record</DialogTitle>
+          <DialogDescription>
+            Attach mail from {senderLabel} to an existing lead or matter. The link survives the next scan.
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          autoFocus
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder="Name or email"
+          aria-label="Search leads and matters"
+        />
+        <ul className="max-h-72 divide-y divide-border overflow-y-auto">
+          {results.map(hit => (
+            <li key={`${hit.kind}:${hit.leadId ?? hit.matterId}`}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-2 py-2 text-left text-sm hover:bg-accent"
+                onClick={() => void onPick(hit)}
+              >
+                <span className="truncate">{hit.name}</span>
+                <Badge variant="secondary">{hit.kind === 'client' ? 'Client' : 'Lead'}</Badge>
+                <span className="ml-auto truncate text-xs text-muted-foreground">
+                  {hit.email ?? ''}
+                </span>
+              </button>
+            </li>
+          ))}
+          {searching && <li className="px-2 py-2 text-xs text-muted-foreground">Searching…</li>}
+          {!searching && query.trim().length >= 2 && results.length === 0 && (
+            <li className="px-2 py-2 text-xs text-muted-foreground">No matches.</li>
+          )}
+          {!searching && query.trim().length < 2 && (
+            <li className="px-2 py-2 text-xs text-muted-foreground">Type at least two characters.</li>
+          )}
+        </ul>
+      </DialogContent>
+    </Dialog>
   )
 }
 

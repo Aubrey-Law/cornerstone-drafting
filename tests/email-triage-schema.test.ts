@@ -90,6 +90,28 @@ describe('email triage migration', () => {
   })
 })
 
+describe('the manual record-link migration', () => {
+  function linkMigration(): string {
+    const dir = path.join(process.cwd(), 'supabase/migrations')
+    const name = fs.readdirSync(dir).find(f => f.endsWith('_email_triage_record_linked_manually.sql'))
+    if (!name) throw new Error('record_linked_manually migration not found')
+    return fs.readFileSync(path.join(dir, name), 'utf8')
+  }
+
+  it('adds a durable flag so scan cannot overwrite a Mail Desk link', () => {
+    const sql = linkMigration()
+    expect(sql).toContain('record_linked_manually boolean NOT NULL DEFAULT false')
+    expect(sql).toContain("NOTIFY pgrst, 'reload schema'")
+  })
+
+  it('sorts after the base triage table', () => {
+    const names = fs.readdirSync(path.join(process.cwd(), 'supabase/migrations'))
+      .filter(n => n.endsWith('.sql')).sort()
+    expect(names.findIndex(n => n.endsWith('_email_triage_record_linked_manually.sql')))
+      .toBeGreaterThan(names.findIndex(n => n.endsWith('_email_triage.sql')))
+  })
+})
+
 describe('the legal-vendor seed migration', () => {
   function vendorSeed(): string {
     const dir = path.join(process.cwd(), 'supabase/migrations')
