@@ -31,8 +31,8 @@ import {
   designPlanTypeIncludesRevocableTrust,
   normalizeDesignPlanType,
   planTypeDisallowsRevocableTrustDocument,
-  type DesignPlanType,
 } from '@/lib/designPlanType'
+import { applyDesignPlanType } from '@/lib/designSheet/applyPlanType'
 import {
   AttorneyNoteBanner,
   AttorneySelect,
@@ -130,31 +130,14 @@ export function PlanTypeBlock({ sheet, onChange }: SectionProps) {
   const normalizedPlanType = normalizeDesignPlanType(sheet.plan_type)
 
   const handlePlanTypeSelect = (value: string) => {
-    const nextPlanType = value as DesignPlanType
+    const nextPlanType = normalizeDesignPlanType(value)
+    if (!nextPlanType) return
     onChange('plan_type', () => nextPlanType)
-
-    if (planTypeDisallowsRevocableTrustDocument(nextPlanType)) {
-      onChange('decisions', prevSheet => {
-        const inclusionsForPlan = getDocumentInclusions({ ...prevSheet, plan_type: value })
-        if (!inclusionsForPlan.trust) return prevSheet.decisions ?? {}
-        return mergeDecisionUpdates(prevSheet,
-          current => setDocumentInclusion(current, 'trust', false),
-          current => setEstatePlanDesignSetup(current, { trust: false, will_title: 'last_will' }),
-        )
-      })
-      return
-    }
-
-    if (designPlanTypeIncludesRevocableTrust(nextPlanType)) {
-      onChange('decisions', prevSheet => {
-        const inclusionsForPlan = getDocumentInclusions({ ...prevSheet, plan_type: value })
-        if (inclusionsForPlan.trust) return prevSheet.decisions ?? {}
-        return mergeDecisionUpdates(prevSheet,
-          current => setDocumentInclusion(current, 'trust', true),
-          current => setEstatePlanDesignSetup(current, { trust: true, will_title: 'pour_over_will' }),
-        )
-      })
-    }
+    onChange('decisions', prevSheet => {
+      const applied = applyDesignPlanType(prevSheet, nextPlanType)
+      if (!applied.decisions) return prevSheet.decisions ?? {}
+      return applied.decisions
+    })
   }
 
   return (

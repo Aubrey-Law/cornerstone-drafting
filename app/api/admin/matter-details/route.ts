@@ -93,9 +93,10 @@ const WRITABLE_FIELDS = new Set([
   'next_action_date',
 ])
 
-// Plan composition belongs to the design sheet. The matter page renders these
-// read-only and links out; rejecting them here means a stale client, a script
-// or a future component cannot quietly create a second source of truth.
+// Plan composition belongs to the design sheet. Matter details edits plan type
+// through /api/admin/matters/[id]/plan-type, which writes the sheet. Rejecting
+// these columns here means a stale client, a script or a future component
+// cannot quietly create a second source of truth on matter_details.
 const DESIGN_SHEET_OWNED_FIELDS = new Set([
   'plan_type',
   'trust_type',

@@ -4,9 +4,11 @@ import type { MatterDetailsRow } from '@/types/matter-details'
 
 /**
  * The design sheet owns plan composition — plan type, trust names, credit
- * shelter and the fiduciary appointments. The matter page renders those facts
- * and links back to the sheet to edit them; nothing here is writable from the
- * matter page (the matter_details PATCH route rejects the same keys).
+ * shelter and the fiduciary appointments. Matter details edits plan type
+ * through the plan-type route, which writes this sheet; trust names, credit
+ * shelter and appointments stay read-only here and still link back to the
+ * sheet. The matter_details PATCH route rejects those keys so they cannot
+ * become a second copy.
  *
  * Everything is computed on the server so the matter page ships one flat,
  * already-resolved object instead of the whole design sheet.
