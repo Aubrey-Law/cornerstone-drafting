@@ -14,6 +14,7 @@ import {
 } from '@/lib/tasks/types'
 import { taskStatusStamps } from '@/lib/tasks/statusMutation'
 import { removeTasks } from '@/lib/tasks/dismiss'
+import { invalidateWorkGraphCache } from '@/lib/work/requestCache'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -191,6 +192,7 @@ export async function PATCH(req: Request, { params }: Params) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  invalidateWorkGraphCache()
   const task = data as unknown as TaskRow
 
   let nextTask: TaskRow | null = null
@@ -223,6 +225,7 @@ export async function DELETE(req: Request, { params }: Params) {
   // straight back — see lib/tasks/dismiss.ts.
   const { dismissed, error } = await removeTasks(admin, [row as Pick<TaskRow, 'id' | 'source'>])
   if (error) return NextResponse.json({ error }, { status: 500 })
+  invalidateWorkGraphCache()
 
   return NextResponse.json({ ok: true, dismissed: dismissed.length > 0 })
 }

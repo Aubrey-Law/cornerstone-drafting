@@ -21,14 +21,14 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
   const [intakeReviewCount, draftingNeedsDesignCount, aging, tasksOverdueCount, inboxNeedsReplyCount, emailTriageNeedsReplyCount, overdueInvoiceCount, smsUnreadThreadCount] = await Promise.all([
     section('intakeReviewCount', () => count(admin.from('v_matter_pipeline').select('matter_id', { count: 'exact', head: true }).eq('stage', 'intake_review')), 0),
     section('draftingNeedsDesignCount', async () => {
-      const open = await admin.from('v_matter_pipeline').select('matter_id').neq('stage', 'closed')
+      const [open, sheets] = await Promise.all([
+        admin.from('v_matter_pipeline').select('matter_id').neq('stage', 'closed'),
+        admin.from('design_sheets').select('matter_id'),
+      ])
       if (open.error) throw new Error('Matters unavailable')
-      const ids = (open.data ?? []).map(row => row.matter_id)
-      if (!ids.length) return 0
-      const sheets = await admin.from('design_sheets').select('matter_id').in('matter_id', ids)
       if (sheets.error) throw new Error('Design sheets unavailable')
       const present = new Set((sheets.data ?? []).map(row => row.matter_id))
-      return ids.filter(id => !present.has(id)).length
+      return (open.data ?? []).filter(row => !present.has(row.matter_id)).length
     }, 0),
     section('aging', async () => { const { red, amber } = await fetchMatterAgingTiles(); return { red, amber } }, { red: 0, amber: 0 }),
     section('tasksOverdueCount', async () => (await fetchTaskCounts()).overdue, 0),

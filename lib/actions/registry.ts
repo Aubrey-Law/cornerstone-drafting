@@ -1,5 +1,6 @@
 import { isUuid } from '@/lib/queries/tasks'
 import { setTaskStatus } from '@/lib/tasks/statusMutation'
+import { invalidateWorkGraphCache } from '@/lib/work/requestCache'
 import { TASK_STATUSES, type TaskStatus } from '@/lib/tasks/types'
 import { getDesignSheetImportFieldMeta, buildDesignSheetImportPreview } from '@/lib/designSheetImport/shared'
 import { sanitizeEmailHtml } from '@/lib/email/templateShared'
@@ -531,6 +532,7 @@ const definitions: ActionDefinition[] = [
         const { error } = await context.admin.from('work_item_overrides').delete()
           .eq('user_id', context.actor.id).eq('work_key', input.workKey)
         if (error) throw new Error(error.message)
+        invalidateWorkGraphCache()
         return { workKey: input.workKey, cleared: true }
       }
       const { data, error } = await context.admin.from('work_item_overrides').upsert({
@@ -540,6 +542,7 @@ const definitions: ActionDefinition[] = [
         snoozed_until: input.state === 'snoozed' ? input.snoozedUntil : null,
       }, { onConflict: 'user_id,work_key' }).select('id, work_key, state, snoozed_until').single()
       if (error) throw new Error(error.message)
+      invalidateWorkGraphCache()
       return data
     },
     auditResult(result) {

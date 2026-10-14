@@ -12,7 +12,7 @@ import { TodayBillingCard } from '@/app/admin/components/TodayBillingCard'
 import { TodayClearedCard } from '@/app/admin/components/TodayClearedCard'
 import { DelegatedActivityCard } from '@/app/admin/components/DelegatedActivityCard'
 import { fetchTodayData } from '@/lib/queries/today'
-import { FIRM_TIMEZONE } from '@/lib/firmDate'
+import { FIRM_TIMEZONE, firmTodayKey } from '@/lib/firmDate'
 import { stageLabel, type MatterStage, type PipelineMatter } from '@/types/database'
 import { PageHeader } from '@/components/PageHeader'
 import { AdminPageShell } from '@/components/layout/AdminPageShell'
@@ -163,7 +163,7 @@ export default async function AdminTodayPage({
   if (legacy && legacyFallbackAvailable) return <LegacyTodayPage />
 
   const now = new Date()
-  const [graphResult, preferences, pendingApprovalsResult, assignees] = await Promise.all([
+  const [graphResult, preferences, pendingApprovalsResult, assignees, stored] = await Promise.all([
     fetchWorkGraphForUser(auth.id, now).catch((error: unknown): WorkGraphResult => {
       console.error('Today work graph failed:', error)
       return {
@@ -183,6 +183,8 @@ export default async function AdminTodayPage({
       .order('created_at', { ascending: false })
       .limit(3),
     fetchTaskAssignees(),
+    // The preview dates itself to firm-today, so the stored plan overlaps the graph.
+    fetchDailyPlan(auth.id, firmTodayKey(now)).catch(() => null),
   ])
   const graph = graphResult
   const canDelegate = assignees.some(person => person.id !== auth.id)
@@ -192,7 +194,6 @@ export default async function AdminTodayPage({
     appointments: graph.appointments,
     now,
   })
-  const stored = await fetchDailyPlan(auth.id, preview.date).catch(() => null)
   const calendarStatus = stored
     ? await getDailyPlanCalendarStatus(getAdminClient(), stored, graph.items).catch(() => null)
     : null

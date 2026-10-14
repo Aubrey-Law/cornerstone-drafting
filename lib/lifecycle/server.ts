@@ -40,6 +40,39 @@ export interface MatterLifecycleEvidence {
   designStatus: string | null
 }
 
+/**
+ * Columns the Today queue needs in order to clear intake flags and read design
+ * status. The work graph loads this for every open matter, so the rest of the
+ * sheet — assets, notes, bequests, distribution schedules — stays behind.
+ * Writable columns that flag resolution reads are included so a stored value
+ * still wins over an older copy inside `decisions`.
+ */
+export const LIFECYCLE_DESIGN_SHEET_COLUMNS = [
+  'matter_id',
+  'version',
+  'status',
+  'intake_review_flags',
+  'decisions',
+  'client_dob',
+  'spouse_dob',
+  'county',
+  'marital_status',
+  'plan_type',
+  'children',
+  'trustee_slots',
+  'executor_slots',
+  'executor_same_as_trustee',
+  'poa_slots',
+  'poa_same_as_trustee',
+  'hcp_slots',
+  'spouse_executor_slots',
+  'spouse_executor_same_as_trustee',
+  'spouse_trustee_slots',
+  'spouse_poa_slots',
+  'spouse_hcp_slots',
+  'guardian_slots',
+].join(', ')
+
 export async function loadMatterLifecycleEvidenceBatch(
   matterIds: string[],
 ): Promise<Map<string, MatterLifecycleEvidence>> {
@@ -54,7 +87,7 @@ export async function loadMatterLifecycleEvidenceBatch(
   const [engagementResult, designResult] = await Promise.all([
     engagementQuery,
     admin.from('design_sheets')
-      .select('*')
+      .select(LIFECYCLE_DESIGN_SHEET_COLUMNS)
       .in('matter_id', uniqueIds)
       .order('version', { ascending: false }),
   ])
@@ -70,7 +103,7 @@ export async function loadMatterLifecycleEvidenceBatch(
     })
   }
   const designByMatter = new Map<string, Record<string, unknown>>()
-  for (const row of (designResult.data ?? []) as Array<Record<string, unknown>>) {
+  for (const row of (designResult.data ?? []) as unknown as Array<Record<string, unknown>>) {
     const matterId = typeof row.matter_id === 'string' ? row.matter_id : null
     if (matterId && !designByMatter.has(matterId)) designByMatter.set(matterId, row)
   }

@@ -5,6 +5,7 @@ import { TASK_COLUMNS, isUuid } from '@/lib/queries/tasks'
 import { snoozedDueAt } from '@/lib/tasks/snooze'
 import { removeTasks } from '@/lib/tasks/dismiss'
 import type { TaskRow } from '@/lib/tasks/types'
+import { invalidateWorkGraphCache } from '@/lib/work/requestCache'
 
 /**
  * /api/admin/tasks/bulk — act on a selection in one request.
@@ -105,6 +106,7 @@ async function assignSelection(admin: Admin, ids: string[], rawAssignee: unknown
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const tasks = (data ?? []) as unknown as TaskRow[]
+  invalidateWorkGraphCache()
   return NextResponse.json({
     tasks,
     updated: tasks.length,
@@ -161,6 +163,7 @@ async function snoozeSelection(admin: Admin, ids: string[], rawDays: unknown, us
     return NextResponse.json({ error: message }, { status: 500 })
   }
 
+  invalidateWorkGraphCache()
   return NextResponse.json({
     tasks,
     updated: tasks.length,
@@ -200,6 +203,7 @@ export async function DELETE(req: Request) {
   // them straight back — see lib/tasks/dismiss.ts. Both leave the queue.
   const { removed: deleted, dismissed, error } = await removeTasks(admin, deletable)
   if (error) return NextResponse.json({ error }, { status: 500 })
+  invalidateWorkGraphCache()
 
   return NextResponse.json({
     deleted,

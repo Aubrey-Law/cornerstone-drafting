@@ -12,6 +12,7 @@ import {
 } from '@/lib/slaTasks/schedule'
 import { PLAN_TASK_COLUMNS } from '@/lib/slaTasks/types'
 import { TASK_STATUSES, type ChecklistItem, type TaskRow, type TaskStatus } from '@/lib/tasks/types'
+import { invalidateWorkGraphCache } from '@/lib/work/requestCache'
 
 /**
  * "Skipped — not applicable" is `archived` with `skipped_at` set. It travels as
@@ -179,6 +180,7 @@ export async function PATCH(
     .select(PLAN_TASK_COLUMNS)
     .single()
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+  invalidateWorkGraphCache()
 
   let shifted: ShiftedTaskDates[] = []
   if (shiftDays > 0) {

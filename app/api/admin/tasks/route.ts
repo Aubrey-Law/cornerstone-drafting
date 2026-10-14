@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/apiAuth'
 import { getAdminClient } from '@/lib/supabaseAdmin'
 import { TASK_COLUMNS, fetchTasks, isUuid, type TaskScope } from '@/lib/queries/tasks'
 import { actorFrom, logTaskActivity } from '@/lib/tasks/server'
+import { invalidateWorkGraphCache } from '@/lib/work/requestCache'
 import { parseRecurrence } from '@/lib/tasks/recurrence'
 import { createTaskCalendarHold, TaskCalendarHoldError } from '@/lib/tasks/calendarHold'
 import {
@@ -207,6 +208,7 @@ export async function POST(req: Request) {
   }
 
   await logTaskActivity(admin, task, 'task_created', actorFrom(auth.user))
+  invalidateWorkGraphCache()
 
   return NextResponse.json({ task }, { status: 201 })
 }
