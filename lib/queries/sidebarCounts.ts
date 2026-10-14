@@ -20,16 +20,16 @@ export async function fetchSidebarCounts(): Promise<SidebarCounts> {
   }
   const [intakeReviewCount, draftingNeedsDesignCount, aging, tasksOverdueCount, inboxNeedsReplyCount, emailTriageNeedsReplyCount, overdueInvoiceCount, smsUnreadThreadCount] = await Promise.all([
     section('intakeReviewCount', () => count(admin.from('v_matter_pipeline').select('matter_id', { count: 'exact', head: true }).eq('stage', 'intake_review')), 0),
-    section('draftingNeedsDesignCount', async () => {
-      const [open, sheets] = await Promise.all([
-        admin.from('v_matter_pipeline').select('matter_id').neq('stage', 'closed'),
-        admin.from('design_sheets').select('matter_id'),
-      ])
-      if (open.error) throw new Error('Matters unavailable')
-      if (sheets.error) throw new Error('Design sheets unavailable')
-      const present = new Set((sheets.data ?? []).map(row => row.matter_id))
-      return (open.data ?? []).filter(row => !present.has(row.matter_id)).length
-    }, 0),
+    // Open matters with no design sheet. The pipeline view's design_status is
+    // the newest version, and a sheet's status is never null, so a null here
+    // means no row. An exact count is not cut off at PostgREST's max_rows,
+    // which a download of every design_sheets.matter_id is: extra versions and
+    // closed-matter sheets filled that cap and left later open matters looking
+    // sheetless.
+    section('draftingNeedsDesignCount', () => count(admin.from('v_matter_pipeline')
+      .select('matter_id', { count: 'exact', head: true })
+      .neq('stage', 'closed')
+      .is('design_status', null)), 0),
     section('aging', async () => { const { red, amber } = await fetchMatterAgingTiles(); return { red, amber } }, { red: 0, amber: 0 }),
     section('tasksOverdueCount', async () => (await fetchTaskCounts()).overdue, 0),
     // Secure client messages remain actionable on Today after Inbox retirement.
