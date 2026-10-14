@@ -30,6 +30,7 @@ function emailRow(overrides: Partial<EmailTriageRow>): EmailTriageRow {
     client_intake_id: null,
     matter_id: '11111111-1111-1111-1111-111111111111',
     contact_id: null,
+    record_linked_manually: false,
     status: 'needs_reply',
     draft_subject: null,
     draft_body: null,

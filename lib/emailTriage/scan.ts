@@ -26,6 +26,7 @@ import {
   isMissingTableError,
   latestInboundMessage,
 } from './fileInbound'
+import { applyManualLinkOnScan } from './linkRecord'
 import { applyAndRecordMailboxSort } from './mailboxSort'
 import { evaluateNeedsReply } from './needsReply'
 import type { SenderMatch } from './classifySender'
@@ -251,6 +252,11 @@ export interface ExistingTriageRow {
   gmail_draft_message_id: string | null
   status: string
   classification: TriageClassification
+  classification_reason: string | null
+  client_intake_id: string | null
+  matter_id: string | null
+  contact_id: string | null
+  record_linked_manually: boolean
 }
 
 /**
@@ -269,10 +275,14 @@ export interface ExistingTriageRow {
 async function loadExistingRows(connectionEmail: string): Promise<ExistingTriageRow[]> {
   const { data, error } = await getAdminClient()
     .from('email_triage_threads')
-    .select('id, gmail_thread_id, gmail_message_id, gmail_draft_message_id, status, classification')
+    .select(
+      'id, gmail_thread_id, gmail_message_id, gmail_draft_message_id, status, '
+      + 'classification, classification_reason, client_intake_id, matter_id, '
+      + 'contact_id, record_linked_manually',
+    )
     .eq('connection_email', connectionEmail)
   if (error) throw error
-  return (data ?? []) as ExistingTriageRow[]
+  return (data ?? []) as unknown as ExistingTriageRow[]
 }
 
 const OPEN_STATUSES = new Set(['needs_reply', 'drafting', 'drafted', 'failed'])
@@ -606,7 +616,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
       const inbound = thread.messages.find(m => m.id === verdict.inboundMessageId)
       if (!inbound) continue
 
-      const match = await classifySender(admin, {
+      const classified = await classifySender(admin, {
         email: inbound.from.email,
         name: inbound.from.name,
         threadsFromSender: threadsBySender.get(inbound.from.email.toLowerCase()) ?? 1,
@@ -627,7 +637,12 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
         }),
       })
 
-      if (match.classification === 'internal') {
+      // A manual Mail Desk link survives sender reclassification — including
+      // automated → Noise — so the next scan does not undo the attorney.
+      const match = applyManualLinkOnScan(classified, existing)
+      const keepManualLink = match.recordLinkedManually
+
+      if (match.classification === 'internal' && !keepManualLink) {
         counts.skippedInternal += 1
         await applyAndRecordMailboxSort({
           token: identity.token,
@@ -639,7 +654,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
         })
         continue
       }
-      if (match.classification === 'automated') {
+      if (match.classification === 'automated' && !keepManualLink) {
         counts.skippedAutomated += 1
         await applyAndRecordMailboxSort({
           token: identity.token,
@@ -650,6 +665,15 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
           automatedHard: match.automatedHard,
           cache: labelCache,
         })
+        continue
+      }
+
+      // Queue classifications only (manual link already replaced automated/internal).
+      const queueClassification = match.classification
+      if (
+        queueClassification === 'internal'
+        || queueClassification === 'automated'
+      ) {
         continue
       }
 
@@ -673,11 +697,12 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
           subject: inbound.subject,
           snippet: inbound.snippet,
           received_at: verdict.receivedAt,
-          classification: match.classification,
+          classification: queueClassification,
           classification_reason: match.reason,
           client_intake_id: match.clientIntakeId,
           matter_id: match.matterId,
           contact_id: match.contactId,
+          record_linked_manually: keepManualLink,
           last_scanned_at: now,
           updated_at: now,
           human_draft_at: verdict.humanDraftAt,
@@ -711,7 +736,7 @@ export async function runEmailTriageScan(opts: TriageScanOptions): Promise<Triag
         token: identity.token,
         threadId: thread.id,
         kind: 'needs_reply',
-        classification: match.classification,
+        classification: queueClassification,
         archiveEnabled: settings.archiveNonClient,
         triageRowId: (queuedRow as { id?: string } | null)?.id ?? null,
         cache: labelCache,

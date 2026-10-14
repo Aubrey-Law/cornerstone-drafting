@@ -35,6 +35,11 @@ function row(over: Partial<ExistingTriageRow> = {}): ExistingTriageRow {
     gmail_draft_message_id: null,
     status: 'needs_reply',
     classification: 'client',
+    classification_reason: null,
+    client_intake_id: null,
+    matter_id: null,
+    contact_id: null,
+    record_linked_manually: false,
     ...over,
   }
 }
