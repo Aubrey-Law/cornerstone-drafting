@@ -11,10 +11,15 @@ import { formatAssetCurrency } from '@/lib/assets/format'
 import { ageInYearsFromDob, formatDobWithAge, toDateInputValue } from '@/lib/dob'
 import { normalizeTargetSigningDate, targetSigningDateInput } from '@/lib/matterDates'
 import { PRACTICE_AREA_OPTIONS, normalizePracticeArea } from '@/lib/practiceArea'
-import { designPlanTypeLabel } from '@/lib/designPlanType'
+import { DESIGN_PLAN_TYPE_OPTIONS, designPlanTypeLabel, normalizeDesignPlanType } from '@/lib/designPlanType'
+import {
+  LEGAL_PLAN_OPTIONS,
+  MATTER_BILLING_TYPE_LABEL,
+  normalizeMatterBillingType,
+} from '@/lib/billing/billingType'
+import { MATTER_TYPE_OPTIONS, isCoupleMatter, normalizeMatterType, type MatterType } from '@/lib/matter/matterType'
 import { resolveDraftingDate, DRAFTING_DATE_COLUMNS } from '@/lib/matter/draftingDates'
 import { EMPTY_PLAN_MIRROR, type MatterPlanMirror } from '@/lib/matter/planMirror'
-import { isCoupleMatter, type MatterType } from '@/lib/matter/matterType'
 import { MARITAL_STATUS_OPTIONS } from '@/lib/sharedFields'
 import {
   REFERRAL_SOURCE_OPTIONS,
@@ -76,7 +81,7 @@ export interface MatterFactsPanelProps {
   matterTypeSaving?: boolean
   details: MatterDetailsRow | null
   designSheetPlanType: string | null
-  /** Design-sheet-owned plan facts, resolved server-side and read-only here. */
+  /** Design-sheet-owned plan facts, resolved server-side. Plan type itself is editable. */
   planMirror?: MatterPlanMirror
   /** max(communications.created_at) — the quiet chip is derived, never stored. */
   lastContactAt?: string | null
@@ -95,6 +100,7 @@ export interface MatterFactsPanelProps {
   latestNoteAt: string | null
   onSaveField: (field: keyof MatterDetailsRow, value: unknown) => Promise<void>
   onSaveMatterType: (matterType: MatterType) => Promise<void>
+  onSavePlanType: (planType: string) => Promise<void>
   savingField: keyof MatterDetailsRow | null
   lastSavedAt: string | null
   error: string | null
@@ -174,6 +180,7 @@ export function MatterFactsPanel({
   matter,
   matterId,
   matterType,
+  matterTypeSaving = false,
   details,
   designSheetPlanType,
   planMirror = EMPTY_PLAN_MIRROR,
@@ -190,6 +197,8 @@ export function MatterFactsPanel({
   noteCount,
   latestNoteAt,
   onSaveField,
+  onSaveMatterType,
+  onSavePlanType,
   savingField,
   lastSavedAt,
   error,
@@ -337,15 +346,33 @@ export function MatterFactsPanel({
   }
 
   const practiceArea = normalizePracticeArea(details?.practice_area ?? matter.practice_area)
+  const estatePlan = practiceArea === 'EP' || practiceArea === 'EP-LP'
+  const showMatterType = practiceArea !== 'CP'
+  const showLegalPlan = practiceArea === 'EP-LP'
   const spouseName = [spouse?.first_name, spouse?.last_name].filter(Boolean).join(' ')
     || matter.spouse_name
     || ''
   const spouseDob = spouse?.date_of_birth ?? matter.spouse_dob ?? null
   // Contact editing includes married clients even when only one spouse is represented.
   const isCouple = maritalStatus.toLowerCase() === 'married' || isCoupleMatter(matterType)
-  const planLabel = designSheetPlanType || planMirror.planType
-    ? designPlanTypeLabel(designSheetPlanType ?? planMirror.planType)
-    : '—'
+  const rawPlanType = designSheetPlanType ?? planMirror.planType
+  const planType = normalizeDesignPlanType(rawPlanType)
+  const planLabel = rawPlanType ? designPlanTypeLabel(rawPlanType) : '—'
+  const planOptions = [
+    ...(planType ? [] : [{ value: '', label: planLabel === '—' ? '—' : planLabel }]),
+    ...DESIGN_PLAN_TYPE_OPTIONS,
+  ]
+  const matterTypeOptions = [
+    ...(matterType ? [] : [{ value: '', label: '—' }]),
+    ...MATTER_TYPE_OPTIONS,
+  ]
+  const billingType = normalizeMatterBillingType(details?.billing_type)
+  const legalPlanOptions = [
+    ...(billingType ? [] : [{ value: '', label: '—' }]),
+    ...(billingType === 'flat_fee' ? [{ value: 'flat_fee', label: MATTER_BILLING_TYPE_LABEL.flat_fee }] : []),
+    ...LEGAL_PLAN_OPTIONS,
+  ]
+  const dateKey = (value: string | null | undefined) => (typeof value === 'string' ? value.slice(0, 10) : '')
   const referralSource = normalizeReferralSource(details?.referral_source ?? matter.referral_source)
   // Derived from the communications timeline — never a stored last_client_contact.
   const quiet = quietDays(lastContactAt)
@@ -510,12 +537,77 @@ export function MatterFactsPanel({
           options={PRACTICE_AREA_OPTIONS}
           onSave={next => onSaveField('practice_area', next)}
         />
-        {/* The design sheet owns plan composition — read-only, link out to edit. */}
-        <ReadOnlyRow label="Plan">
-          <Link href={designHref} className="font-semibold text-primary hover:underline">
-            {planLabel}
-          </Link>
-        </ReadOnlyRow>
+        {showMatterType && (
+          <InlineSelect
+            label="Matter type"
+            value={matterType ?? ''}
+            disabled={matterTypeSaving}
+            options={matterTypeOptions}
+            onSave={next => {
+              const parsed = normalizeMatterType(next)
+              if (parsed) return onSaveMatterType(parsed)
+            }}
+          />
+        )}
+        {estatePlan ? (
+          <InlineSelect
+            label="Plan"
+            accent
+            value={planType ?? ''}
+            options={planOptions}
+            onSave={next => {
+              if (normalizeDesignPlanType(next)) return onSavePlanType(next)
+            }}
+          />
+        ) : (
+          <ReadOnlyRow label="Plan">
+            <Link href={designHref} className="font-semibold text-primary hover:underline">
+              {planLabel}
+            </Link>
+          </ReadOnlyRow>
+        )}
+        {showLegalPlan && (
+          <>
+            <InlineSelect
+              label="Legal plan"
+              value={billingType ?? ''}
+              options={legalPlanOptions}
+              onSave={next => {
+                if (next) return onSaveField('billing_type', next)
+              }}
+            />
+            <InlineText
+              label="Member ID"
+              value={details?.legal_plan_member_id ?? ''}
+              onSave={next => onSaveField('legal_plan_member_id', next)}
+            />
+            <InlineDate
+              label="Service start"
+              value={dateKey(details?.legal_plan_service_start)}
+              onSave={next => onSaveField('legal_plan_service_start', next)}
+            />
+            <InlineDate
+              label="Service end"
+              value={dateKey(details?.legal_plan_service_end)}
+              onSave={next => onSaveField('legal_plan_service_end', next)}
+            />
+            <InlineText
+              label="Client status"
+              value={details?.client_status ?? ''}
+              onSave={next => onSaveField('client_status', next)}
+            />
+            <InlineDate
+              label="Claim submitted"
+              value={dateKey(details?.claim_submitted_date)}
+              onSave={next => onSaveField('claim_submitted_date', next)}
+            />
+            <InlineDate
+              label="Reimbursement received"
+              value={dateKey(details?.reimbursement_received_date)}
+              onSave={next => onSaveField('reimbursement_received_date', next)}
+            />
+          </>
+        )}
         <InlineText
           label="Flat fee"
           tabular

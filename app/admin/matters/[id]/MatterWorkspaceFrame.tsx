@@ -83,6 +83,7 @@ export function MatterWorkspaceFrame({ data, active, children }: {
   const facts = useMatterFacts({
     matterId, token, setMatter,
     initialDetails: data.details, initialMatterType: data.matterType, initialMatterNumber: data.matterNumber,
+    initialPlanType: data.designSheetPlanType,
   })
   const intake = useMatterIntake({
     matterId, initialIntakeId: data.intakeId, initiallyCompleted: data.intakeCompleted, initialUploadCounts: data.uploadCounts,
@@ -113,7 +114,7 @@ export function MatterWorkspaceFrame({ data, active, children }: {
       <MatterWorkspaceHeader
         matter={matter}
         matterNumber={facts.matterNumber}
-        planLabel={designPlanTypeLabel(data.designSheetPlanType ?? data.planMirror.planType) || null}
+        planLabel={designPlanTypeLabel(facts.planType ?? data.planMirror.planType) || null}
         matterTypeLabel={facts.matterType ? matterTypeLabel(facts.matterType) : null}
         intakeCompleted={intake.intakeCompleted}
         intakeId={intake.liveIntakeId}
@@ -184,7 +185,7 @@ export function MatterWorkspaceFrame({ data, active, children }: {
               matterType: facts.matterType,
               matterTypeSaving: facts.matterTypeSaving,
               details: facts.details,
-              designSheetPlanType: data.designSheetPlanType,
+              designSheetPlanType: facts.planType,
               planMirror: data.planMirror,
               // Last contact derives from the communications timeline, which this route does not load.
               lastContactAt: null,
@@ -200,6 +201,7 @@ export function MatterWorkspaceFrame({ data, active, children }: {
               latestNoteAt: null,
               onSaveField: facts.saveField,
               onSaveMatterType: facts.saveMatterType,
+              onSavePlanType: facts.savePlanType,
               savingField: facts.savingField,
               lastSavedAt: facts.lastSavedAt,
               error: facts.error,

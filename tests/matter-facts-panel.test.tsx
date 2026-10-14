@@ -146,6 +146,7 @@ type PanelProps = React.ComponentProps<typeof MatterFactsPanel>
 function renderPanel(props: Partial<PanelProps> = {}) {
   const onSaveField = props.onSaveField ?? vi.fn().mockResolvedValue(undefined)
   const onSaveMatterType = props.onSaveMatterType ?? vi.fn().mockResolvedValue(undefined)
+  const onSavePlanType = props.onSavePlanType ?? vi.fn().mockResolvedValue(undefined)
   const onOpenTab = props.onOpenTab ?? vi.fn()
   render(
     <MatterFactsPanel
@@ -169,10 +170,11 @@ function renderPanel(props: Partial<PanelProps> = {}) {
       {...props}
       onSaveField={onSaveField}
       onSaveMatterType={onSaveMatterType}
+      onSavePlanType={onSavePlanType}
       onOpenTab={onOpenTab}
     />,
   )
-  return { onSaveField, onOpenTab }
+  return { onSaveField, onSaveMatterType, onSavePlanType, onOpenTab }
 }
 
 function patchCalls() {
@@ -299,10 +301,13 @@ describe('MatterFactsPanel', () => {
     expect(patchCalls()).toHaveLength(0)
   })
 
-  it('removes county, trust name and matter type from the flyout', async () => {
-    renderPanel({ simplified: true, details: { ...DETAILS, jurisdiction_county: 'Middlesex' } })
+  it('keeps county and trust name off the details panel and edits matter type there', async () => {
+    const user = userEvent.setup()
+    const { onSaveMatterType } = renderPanel({ simplified: true, details: { ...DETAILS, jurisdiction_county: 'Middlesex' } })
     await screen.findByText('margaret.chen@example.com')
-    for (const label of ['County', 'Trust name', 'Matter type']) expect(screen.queryByText(label)).toBeNull()
+    for (const label of ['County', 'Trust name']) expect(screen.queryByText(label)).toBeNull()
+    await user.selectOptions(screen.getByLabelText('Matter type'), 'individual')
+    expect(onSaveMatterType).toHaveBeenCalledWith('individual')
   })
 
   it('hides the Spouse section when the client is not married', async () => {
@@ -602,6 +607,54 @@ describe('MatterFactsPanel', () => {
   it('reports a save error with an alert role', async () => {
     renderPanel({ error: 'Failed to save referral_source' })
     expect((await screen.findByRole('alert')).textContent).toContain('Failed to save')
+  })
+
+  it('saves the estate plan from matter details', async () => {
+    const user = userEvent.setup()
+    const { onSavePlanType } = renderPanel({ designSheetPlanType: 'outright_will' })
+    const plan = await screen.findByLabelText('Plan')
+    expect((plan as HTMLSelectElement).value).toBe('outright_will')
+    await user.selectOptions(plan, 'pour_over')
+    expect(onSavePlanType).toHaveBeenCalledWith('pour_over')
+  })
+
+  it('keeps plan type as a design-sheet link outside estate planning', async () => {
+    renderPanel({ details: { ...DETAILS, practice_area: 'Probate' } })
+    const plan = await screen.findByRole('link', { name: '—' })
+    expect(plan.getAttribute('href')).toContain('/admin/drafting/m-1?step=design')
+    expect(screen.queryByLabelText('Plan')).toBeNull()
+  })
+
+  it('shows and saves legal plan facts on an EPLP matter', async () => {
+    const user = userEvent.setup()
+    const { onSaveField } = renderPanel({
+      details: {
+        ...DETAILS,
+        practice_area: 'EP-LP',
+        billing_type: 'metlife',
+        legal_plan_member_id: 'ML-100',
+        legal_plan_service_start: '2026-01-01',
+        legal_plan_service_end: '2026-12-31',
+      },
+    })
+    expect(await screen.findByLabelText('Legal plan')).toBeTruthy()
+    expect(screen.getByText('ML-100')).toBeTruthy()
+    expect((screen.getByLabelText('Service start') as HTMLInputElement).value).toBe('2026-01-01')
+    expect((screen.getByLabelText('Service end') as HTMLInputElement).value).toBe('2026-12-31')
+    await user.selectOptions(screen.getByLabelText('Legal plan'), 'arag')
+    expect(onSaveField).toHaveBeenCalledWith('billing_type', 'arag')
+    await user.click(screen.getByRole('button', { name: /Member ID/ }))
+    const member = screen.getByLabelText('Member ID')
+    await user.clear(member)
+    await user.type(member, 'ML-200{Enter}')
+    await waitFor(() => expect(onSaveField).toHaveBeenCalledWith('legal_plan_member_id', 'ML-200'))
+  })
+
+  it('hides legal plan facts on an estate planning matter that is not EPLP', async () => {
+    renderPanel()
+    await screen.findByLabelText('Plan')
+    expect(screen.queryByLabelText('Legal plan')).toBeNull()
+    expect(screen.queryByText('Member ID')).toBeNull()
   })
 })
 

@@ -267,7 +267,17 @@ function MatterDetailClientInner({
     matterType,
     matterTypeSaving,
     saveMatterType: handleSaveMatterType,
-  } = useMatterFacts({ matterId, token, setMatter, initialDetails: initialMatterDetails, initialMatterType, initialMatterNumber })
+    planType: designPlanType,
+    savePlanType,
+  } = useMatterFacts({
+    matterId,
+    token,
+    setMatter,
+    initialDetails: initialMatterDetails,
+    initialMatterType,
+    initialMatterNumber,
+    initialPlanType: designSheetPlanType,
+  })
 
   const practiceArea = normalizePracticeArea(matterDetails?.practice_area ?? matter.practice_area)
   const showProbate = practiceArea === 'Probate'
@@ -436,7 +446,7 @@ function MatterDetailClientInner({
         <MatterWorkspaceHeader
           matter={matter}
           matterNumber={matterNum}
-          planLabel={designPlanTypeLabel(designSheetPlanType ?? planMirror.planType) || null}
+          planLabel={designPlanTypeLabel(designPlanType ?? planMirror.planType) || null}
           matterTypeLabel={matterType ? matterTypeLabel(matterType) : null}
           intakeCompleted={intakeCompleted}
           intakeId={liveIntakeId}
@@ -726,7 +736,7 @@ function MatterDetailClientInner({
               matterType,
               matterTypeSaving,
               details: matterDetails,
-              designSheetPlanType,
+              designSheetPlanType: designPlanType,
               planMirror,
               lastContactAt,
               lastContactChannel: lastContact?.channel ?? null,
@@ -741,6 +751,7 @@ function MatterDetailClientInner({
               latestNoteAt: linkedNotes[0]?.created_at ?? null,
               onSaveField: handleSaveMatterDetailField,
               onSaveMatterType: handleSaveMatterType,
+              onSavePlanType: savePlanType,
               savingField,
               lastSavedAt,
               error: matterDetailsError,
