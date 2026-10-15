@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { AttentionBand } from './AttentionBand'
 import {
@@ -59,6 +60,7 @@ function AgendaRow({
   appointment,
   onOpen,
   onReschedule,
+  onRemove,
   now, overlap, timezone,
 }: {
   now: Date
@@ -67,7 +69,9 @@ function AgendaRow({
   appointment: CalendarAppointment
   onOpen: () => void
   onReschedule: () => void
+  onRemove?: () => void
 }) {
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
   const past = Date.parse(appointment.endTime) < now.getTime()
   const followUpReady = now.getTime() >= Date.parse(appointment.endTime) + 10 * 60_000
   const minutes = Math.max(0, Math.round((Date.parse(appointment.endTime) - Date.parse(appointment.startTime)) / 60_000))
@@ -130,10 +134,21 @@ function AgendaRow({
               <Button size="sm" variant="ghost" onClick={onOpen}>
                 <FileText className="mr-1 h-3 w-3" /> Prep pack
               </Button>
-              {!past && appointment.status === 'scheduled' && !isExternallyManagedSource(appointment.source) && (
+              {!past && appointment.status === 'scheduled' && (
                 <Button size="sm" variant="ghost" onClick={onReschedule}>
                   <RotateCcw className="mr-1 h-3 w-3" /> Reschedule
                 </Button>
+              )}
+              {appointment.status === 'scheduled' && isExternallyManagedSource(appointment.source) && onRemove && (
+                confirmingRemove ? (
+                  <>
+                    <span className="text-muted-foreground">Remove from Cornerstone? The client is not emailed.</span>
+                    <Button size="sm" variant="destructive" onClick={onRemove}>Remove meeting</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setConfirmingRemove(false)}>Keep</Button>
+                  </>
+                ) : (
+                  <Button size="sm" variant="ghost" onClick={() => setConfirmingRemove(true)}>Remove…</Button>
+                )
               )}
               {appointment.onlineMeetingUrl && appointment.status === 'scheduled' && !past && (
                 <Button asChild size="sm">
@@ -156,7 +171,7 @@ function AgendaRow({
 }
 
 export function DayAgenda({
-  date, appointments, calendarEvents, attention, rail, onDismissAttention, onOpenAppointment, onReschedule, onBookSlot,
+  date, appointments, calendarEvents, attention, rail, onDismissAttention, onOpenAppointment, onReschedule, onRemove, onBookSlot,
   now = new Date(), todayKey = firmTodayKey(now), timezone = FIRM_TIMEZONE, availability = null,
   calendarConnected = true,
   totalAppointments, totalCalendarEvents, attentionUnavailable = false, conflictAppointments = appointments, conflictCalendarEvents = calendarEvents,
@@ -169,6 +184,7 @@ export function DayAgenda({
   onDismissAttention: (id: string) => void
   onOpenAppointment: (appointment: CalendarAppointment) => void
   onReschedule: (appointment: CalendarAppointment) => void
+  onRemove?: (appointment: CalendarAppointment) => void
   onBookSlot: (startIso?: string) => void
   now?: Date
   todayKey?: string
@@ -193,7 +209,7 @@ export function DayAgenda({
   const events = [...conflictAppointments.map(item => ({ id: `a:${item.id}`, start: Date.parse(item.startTime), end: Date.parse(item.endTime), busy: item.status === 'scheduled' && item.calendarShowAsBusy !== false })), ...conflictCalendarEvents.map(item => ({ id: `g:${item.id}`, start: item.isAllDay ? dateInstant(item.startIso.slice(0, 10), timezone) : Date.parse(item.startIso), end: item.isAllDay ? dateInstant(item.endIso.slice(0, 10), timezone) : Date.parse(item.endIso), busy: item.showAs !== 'free' }))]
   const overlaps = (id: string) => { const event = events.find(item => item.id === id); return !!event?.busy && events.some(other => other.id !== id && other.busy && event.start < other.end && event.end > other.start) }
   const rows = [
-    ...active.map(item => ({ id: `a:${item.id}`, start: Date.parse(item.startTime), node: <AgendaRow appointment={item} now={now} timezone={timezone} overlap={overlaps(`a:${item.id}`)} onOpen={() => onOpenAppointment(item)} onReschedule={() => onReschedule(item)} /> })),
+    ...active.map(item => ({ id: `a:${item.id}`, start: Date.parse(item.startTime), node: <AgendaRow appointment={item} now={now} timezone={timezone} overlap={overlaps(`a:${item.id}`)} onOpen={() => onOpenAppointment(item)} onReschedule={() => onReschedule(item)} onRemove={onRemove ? () => onRemove(item) : undefined} /> })),
     ...external.map(item => ({ id: `g:${item.id}`, start: item.isAllDay ? -Infinity : Date.parse(item.startIso), node: <CalendarEventRow event={item} timezone={timezone} overlap={overlaps(`g:${item.id}`)} /> })),
     ...blocks.map(item => ({ id: `b:${item.id}`, start: item.isAllDay ? -Infinity : Date.parse(item.startIso), node: <div className="rounded border border-border px-3 py-2 text-xs text-foreground" style={{ backgroundImage: BLOCK_HATCH }}>{item.isAllDay ? 'All day' : time(Date.parse(item.startIso))} · <span>{item.subject}</span></div> })),
     ...(gaps ?? []).filter(gap => gap.end - gap.start >= 30 * 60_000).map(gap => ({ id: `gap:${gap.start}`, start: gap.start, node: <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-dashed border-border bg-card p-3 text-xs text-foreground"><span>Open · {time(gap.start)}–{time(gap.end)} · {minutesLabel((gap.end - gap.start) / 60_000)}</span><Button size="sm" variant="outline" onClick={() => onBookSlot(new Date(gap.start).toISOString())}>Book</Button></div> })),

@@ -29,15 +29,21 @@ describe('Calendly appointment calendar mirror', () => {
     expect(sync).toMatch(/onConflict: 'source,external_booking_uid'/)
   })
 
-  it('keeps provider-managed appointments read-only in both API and UI', () => {
+  it('lets staff remove or reschedule a provider-managed appointment in Cornerstone', () => {
     const route = read('app/api/admin/scheduling/appointments/route.ts')
     const drawer = read('app/admin/calendar/EventPrepDrawer.tsx')
     const calendar = read('app/admin/calendar/CalendarClient.tsx')
+    const correction = read('lib/appointments/externalCorrection.ts')
 
-    expect(route).toMatch(/externalSourceLabel\(appointment\.source\)/)
-    expect(route).toContain('This appointment is managed in ${externalLabel}')
+    expect(route).toContain('correctExternalAppointment')
+    expect(route).toContain('action === \'cancel\' || action === \'reschedule\'')
     expect(drawer).toContain('Managed in {externalSourceLabel(appointment.source)}')
-    expect(calendar).toMatch(/a\.status === 'scheduled' && !isExternallyManagedSource\(a\.source\)/)
+    expect(drawer).toContain('Remove…')
+    expect(drawer).toContain('onReschedule(appointment)')
+    expect(calendar).toContain('Meeting removed from Cornerstone')
+    expect(calendar).toContain('Meeting time updated in Cornerstone')
+    expect(calendar).not.toMatch(/a\.status === 'scheduled' && !isExternallyManagedSource\(a\.source\)/)
+    expect(correction).not.toMatch(/sendEmail|enqueueLawmatics/)
   })
 
   it('allows Cal.com as a second read-only calendar source', () => {

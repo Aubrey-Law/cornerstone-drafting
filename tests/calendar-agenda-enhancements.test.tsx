@@ -36,6 +36,23 @@ describe('Day agenda enhancements', () => {
     expect(screen.getByText(/past day/)).toBeInTheDocument()
     expect(screen.queryByText(/rest of today/)).not.toBeInTheDocument()
   })
+  it('lets a Lawmatics meeting be rescheduled or removed from the day', () => {
+    const onReschedule = vi.fn()
+    const onRemove = vi.fn()
+    render(<DayAgenda {...props} onReschedule={onReschedule} onRemove={onRemove} appointments={[{
+      id: 'lm', startTime: '2026-10-07T16:00:00.000Z', endTime: '2026-10-07T16:45:00.000Z', status: 'scheduled',
+      attendeeName: 'Ada Client', attendeeEmail: 'ada@example.com', attendeePhone: null, typeLabel: 'Discovery Call',
+      locationType: 'phone', source: 'lawmatics', calendarSynced: false, notes: null, onlineMeetingUrl: null,
+      linkedMatterId: null, linkedMatterNumber: null, linkedMatterStage: null, linkedMatterPlanType: null, linkedLeadId: null,
+      secondAttendeeName: null, secondAttendeeEmail: null, calendarShowAsBusy: true,
+    }]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Reschedule' }))
+    expect(onReschedule).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove meeting' }))
+    expect(onRemove).toHaveBeenCalledOnce()
+  })
+
   it('leaves future meetings unlabeled until they have a lifecycle', () => {
     render(<DayAgenda {...props} appointments={[{
       id: 'soon', startTime: '2026-10-07T16:00:00.000Z', endTime: '2026-10-07T16:30:00.000Z', status: 'scheduled',

@@ -8,6 +8,7 @@ import {
   rescheduleAppointment,
   SlotTakenError,
 } from '@/lib/appointments/book'
+import { correctExternalAppointment, ExternalAppointmentStateError } from '@/lib/appointments/externalCorrection'
 import { isMissingColumnError, listAppointmentTypes } from '@/lib/appointments/settings'
 import { BookingNameValidationError, externalSourceLabel, isAppointmentLocationType, normalizeBookingNames, type AppointmentRow } from '@/lib/appointments/types'
 import { getAdminClient } from '@/lib/supabaseAdmin'
@@ -293,7 +294,7 @@ function isPatchAction(value: unknown): value is PatchAction {
  * add a Microsoft Teams meeting (the updated invite goes to attendees).
  */
 export async function PATCH(req: NextRequest) {
-  const { err } = await requireAdmin(req)
+  const { err, userId } = await requireAdmin(req)
   if (err) return err
 
   const body = (await req.json().catch(() => ({}))) as PatchBody
@@ -315,15 +316,44 @@ export async function PATCH(req: NextRequest) {
   const appointment = data as AppointmentRow | null
   if (!appointment) return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
   const externalLabel = externalSourceLabel(appointment.source)
-  if (externalLabel) {
-    return NextResponse.json(
-      { error: `This appointment is managed in ${externalLabel}. Reschedule or cancel it there.` },
-      { status: 409 },
-    )
-  }
 
   const type = (await listAppointmentTypes()).find(t => t.id === appointment.appointment_type_id)
   if (!type) return NextResponse.json({ error: 'Unknown appointment type' }, { status: 404 })
+
+  // A Lawmatics, Calendly, or Cal.com meeting can be removed or moved here
+  // when it changes. That updates Cornerstone only — no client email, and no
+  // write back to the scheduler that owns the invite.
+  if (externalLabel && (action === 'cancel' || action === 'reschedule')) {
+    const newStartIso = typeof body.newStartIso === 'string' ? body.newStartIso : ''
+    if (action === 'reschedule' && !Number.isFinite(Date.parse(newStartIso))) {
+      return NextResponse.json({ error: 'newStartIso is required to reschedule' }, { status: 400 })
+    }
+    try {
+      const result = await correctExternalAppointment({
+        appointment,
+        type,
+        action,
+        newStartIso,
+        actorId: userId,
+      })
+      return NextResponse.json({
+        ok: true,
+        status: action === 'cancel' ? 'cancelled' : 'scheduled',
+        ...result,
+      })
+    } catch (e) {
+      if (e instanceof ExternalAppointmentStateError) {
+        return NextResponse.json({ error: e.message }, { status: 409 })
+      }
+      throw e
+    }
+  }
+  if (externalLabel) {
+    return NextResponse.json(
+      { error: `This appointment is managed in ${externalLabel}. Remove or reschedule it here; other changes stay in ${externalLabel}.` },
+      { status: 409 },
+    )
+  }
 
   try {
     if (action === 'cancel') {

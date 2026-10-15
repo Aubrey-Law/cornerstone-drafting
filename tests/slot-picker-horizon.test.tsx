@@ -184,6 +184,24 @@ describe('EventPrepDrawer video service', () => {
     expect(screen.queryByRole('button', { name: /Google Meet/ })).toBeNull()
   })
 
+  it('offers reschedule and remove for a Lawmatics meeting, and no video switch', async () => {
+    const onReschedule = vi.fn()
+    const onRemove = vi.fn(async () => true)
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+    render(<EventPrepDrawer
+      appointment={{ ...base, source: 'lawmatics', endTime: new Date(future.getTime() + 45 * 60_000).toISOString() }}
+      open onOpenChange={() => {}} authHeaders={() => undefined}
+      onReschedule={onReschedule} onRemove={onRemove} onBookNext={() => {}}
+    />)
+    expect(screen.getByText('Managed in Lawmatics')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Google Meet|Teams/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Reschedule' }))
+    expect(onReschedule).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove meeting' }))
+    await waitFor(() => expect(onRemove).toHaveBeenCalledOnce())
+  })
+
   it('offers no switch for a past appointment', () => {
     renderWith({ ...base, startTime: '2020-01-01T10:00:00.000Z', endTime: '2020-01-01T11:00:00.000Z' })
     expect(screen.queryByRole('button', { name: /Google Meet|Teams/ })).toBeNull()
