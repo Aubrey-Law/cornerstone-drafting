@@ -1,42 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { exchangeCode, fetchAccountEmail, toGoogleDisplayError } from '@/lib/googleCalendar'
 import { storeCalendarConnection } from '@/lib/calendarConnections'
 import { getRequestOrigin } from '@/lib/requestOrigin'
 import { safeAdminRedirectPath } from '@/lib/auth/safeRedirect'
-
-interface CallbackState {
-  token?: string | null
-  returnTo?: string
-}
-
-function decodeState(state: string | null): CallbackState {
-  if (!state) return {}
-  try {
-    const raw = Buffer.from(state, 'base64url').toString('utf-8')
-    if (raw.startsWith('{')) return JSON.parse(raw) as CallbackState
-    return { token: raw }
-  } catch {
-    return {}
-  }
-}
+import { clearOAuthState, stateReturnTo, verifyOAuthState } from '@/lib/auth/oauthState'
 
 function redirectBack(req: NextRequest, returnTo: string, params: Record<string, string>) {
   const url = new URL(returnTo, getRequestOrigin(req))
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
-  return NextResponse.redirect(url)
+  return clearOAuthState(NextResponse.redirect(url), 'google')
 }
+
+const STATE_MISMATCH =
+  'This connection request expired or was started in a different browser. Click Connect again.'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const code = searchParams.get('code')
   const error = searchParams.get('error')
   const errorDesc = searchParams.get('error_description')
-  const state = decodeState(searchParams.get('state'))
-  // `state` is unsigned, attacker-suppliable input and the error branches below
-  // redirect before any session check, so an unvalidated returnTo is an
-  // unauthenticated open redirect on the firm's own domain.
-  const returnTo = safeAdminRedirectPath(state.returnTo) ?? '/admin/settings?tab=google'
+  const state = searchParams.get('state')
+  // `state` is attacker-suppliable input and the error branches below redirect
+  // before any session check, so an unvalidated returnTo is an unauthenticated
+  // open redirect on the firm's own domain.
+  const returnTo = safeAdminRedirectPath(stateReturnTo(state)) ?? '/admin/settings?tab=google'
 
   if (error) {
     return redirectBack(req, returnTo, {
@@ -47,21 +34,19 @@ export async function GET(req: NextRequest) {
     return redirectBack(req, returnTo, { gcal_error: 'no_code' })
   }
 
-  let user: { email?: string | null; id: string } | null = null
-  if (state.token) {
-    const sb = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: `Bearer ${state.token}` } } },
-    )
-    user = (await sb.auth.getUser()).data.user
-  } else {
-    const { createServerSupabase } = await import('@/lib/supabaseServer')
-    const sb = await createServerSupabase()
-    user = (await sb.auth.getUser()).data.user
+  // Only the browser that started this connect, signed in as the same staff
+  // user, may store the tokens. A bearer token is never accepted from `state`:
+  // it is plain query text anyone can put on a consent URL.
+  const startedBy = verifyOAuthState(req, 'google', state)
+  if (!startedBy) {
+    return redirectBack(req, returnTo, { gcal_error: STATE_MISMATCH })
   }
 
-  if (!user) {
+  const { createServerSupabase } = await import('@/lib/supabaseServer')
+  const sb = await createServerSupabase()
+  const user = (await sb.auth.getUser()).data.user
+
+  if (!user || user.id !== startedBy) {
     return redirectBack(req, returnTo, { gcal_error: 'forbidden' })
   }
 

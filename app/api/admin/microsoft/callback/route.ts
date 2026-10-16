@@ -7,42 +7,42 @@ import {
 } from '@/lib/microsoftTeams'
 import { getRequestOrigin } from '@/lib/requestOrigin'
 import { safeAdminRedirectPath } from '@/lib/auth/safeRedirect'
-
-function decodeReturnTo(state: string | null): string | undefined {
-  if (!state) return undefined
-  try {
-    const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf-8')) as { returnTo?: unknown }
-    return typeof parsed.returnTo === 'string' ? parsed.returnTo : undefined
-  } catch {
-    return undefined
-  }
-}
+import { clearOAuthState, stateReturnTo, verifyOAuthState } from '@/lib/auth/oauthState'
 
 function redirectBack(req: NextRequest, returnTo: string, params: Record<string, string>) {
   const url = new URL(returnTo, getRequestOrigin(req))
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
-  return NextResponse.redirect(url)
+  return clearOAuthState(NextResponse.redirect(url), 'microsoft')
 }
+
+const STATE_MISMATCH =
+  'This connection request expired or was started in a different browser. Click Connect again.'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const code = searchParams.get('code')
   const error = searchParams.get('error')
   const errorDesc = searchParams.get('error_description')
-  // `state` is unsigned and the error branches redirect before any session
-  // check, so returnTo is validated to keep this from being an open redirect.
-  const returnTo = safeAdminRedirectPath(decodeReturnTo(searchParams.get('state'))) ?? '/admin/settings?tab=google'
+  const state = searchParams.get('state')
+  // `state` is attacker-suppliable and the error branches redirect before any
+  // session check, so returnTo is validated to keep this from being an open redirect.
+  const returnTo = safeAdminRedirectPath(stateReturnTo(state)) ?? '/admin/settings?tab=google'
 
   if (error) {
     return redirectBack(req, returnTo, { msteams_error: toMicrosoftDisplayError(errorDesc || error) })
   }
   if (!code) return redirectBack(req, returnTo, { msteams_error: 'no_code' })
 
+  // Only the browser that started this connect, signed in as the same staff
+  // user, may store the tokens.
+  const startedBy = verifyOAuthState(req, 'microsoft', state)
+  if (!startedBy) return redirectBack(req, returnTo, { msteams_error: STATE_MISMATCH })
+
   // The browser arrives here from Microsoft carrying the staff session cookie.
   const { createServerSupabase } = await import('@/lib/supabaseServer')
   const sb = await createServerSupabase()
   const user = (await sb.auth.getUser()).data.user
-  if (!user) return redirectBack(req, returnTo, { msteams_error: 'forbidden' })
+  if (!user || user.id !== startedBy) return redirectBack(req, returnTo, { msteams_error: 'forbidden' })
 
   const { getAdminClient } = await import('@/lib/supabaseAdmin')
   const { data: profile } = await getAdminClient()

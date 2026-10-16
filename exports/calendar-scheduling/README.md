@@ -9,7 +9,7 @@ working in the new app. It walks through installing this code.
 | `PROMPT.md` | The prompt to paste into Claude Code (or another agent) in the new app |
 | `schema.sql` | One migration that creates every table, constraint and function the code needs |
 | `source/` | ~180 files, ~21k lines. Paths match a Next.js App Router root with the `@/*` alias |
-| `source/tests/` | 31 test files (238 tests) that run against this bundle |
+| `source/tests/` | 33 test files (255 tests) that run against this bundle |
 
 ## What it does
 
@@ -129,9 +129,17 @@ example, a customer and a project), or rename them.
 | `ADMIN_EMAIL` | Address for the firm's new-booking alert |
 | `NEXT_PUBLIC_FIRM_NAME`, `_PHONE`, `_EMAIL`, `_CITY`, `_ATTORNEY_NAME`, `_ATTORNEY_SHORT_NAME` | Branding fallback |
 
-The Google OAuth request (`lib/googleCalendar.ts` `SCOPES`) also asks for
-`gmail.send` and `gmail.modify`, because Cornerstone sends email as the
-attorney. Remove those two scopes if the new app doesn't need them.
+The Google OAuth request (`lib/googleCalendar.ts` `SCOPES`) asks only for the
+calendar. Cornerstone also requests `gmail.send` and `gmail.modify` because it
+sends email as the attorney; add those back only if the new app needs that.
+
+**OAuth state is bound to the browser.** `lib/auth/oauthState.ts` makes each
+connect route set a 10-minute httpOnly cookie holding a random nonce and the
+staff user's id. The callback stores tokens only when the `state` nonce matches
+that cookie and the signed-in user is the one who started the connect. Keep
+this when adapting the auth layer. Without it, a forged consent URL can attach
+someone else's Google account, and with it every booking's attendee details,
+to a staff user's connection.
 
 Cron (Vercel): `{ "path": "/api/cron/appointment-reminders", "schedule": "0 * * * *" }`.
 
@@ -152,6 +160,6 @@ Styling uses Tailwind with shadcn-style theme tokens (`bg-background`,
 ## Verification done before export
 
 - `tsc --noEmit` on `source/` alone (with its own `tsconfig.json`): **0 errors**.
-- `vitest run` in `source/`: **31 files, 238 passed, 2 skipped**. The 2 skipped tests depend on stubbed features (intake invite, spouse prefill) and say so.
+- `vitest run` in `source/`: **33 files, 255 passed, 2 skipped**. The 2 skipped tests depend on stubbed features (intake invite, spouse prefill) and say so.
 - `schema.sql` was applied to a clean Postgres 16 with a stub `auth` schema. Checks: an overlapping booking is rejected; a staff-confirmed overlap is allowed; `rate_limit_consume` counts.
 - **Not verified:** running the app end to end, live Google or Microsoft OAuth, and email delivery. These need the new app's credentials.
