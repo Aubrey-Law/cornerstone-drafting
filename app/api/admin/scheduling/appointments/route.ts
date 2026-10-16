@@ -7,6 +7,7 @@ import {
   markNoShow,
   rescheduleAppointment,
   SlotTakenError,
+  StaffBookingWarningError,
 } from '@/lib/appointments/book'
 import { correctExternalAppointment, ExternalAppointmentStateError } from '@/lib/appointments/externalCorrection'
 import { isMissingColumnError, listAppointmentTypes } from '@/lib/appointments/settings'
@@ -160,6 +161,8 @@ interface PostBody {
   /** Booked from a lead or matter page: link to that record, not an email match. */
   linkedLeadId?: unknown
   linkedMatterId?: unknown
+  /** True once staff confirm the overlap / off-hours warnings. */
+  overrideWarnings?: unknown
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -248,6 +251,7 @@ export async function POST(req: NextRequest) {
       videoProvider: body.videoProvider === 'microsoft_teams' ? 'microsoft_teams' : null,
       linkedLeadId: optionalUuid(body.linkedLeadId),
       linkedMatterId: optionalUuid(body.linkedMatterId),
+      overrideWarnings: body.overrideWarnings === true,
     })
     return NextResponse.json({
       ok: true,
@@ -257,6 +261,12 @@ export async function POST(req: NextRequest) {
       ...(result.teamsMeetingError ? { teamsMeetingError: result.teamsMeetingError } : {}),
     })
   } catch (e) {
+    if (e instanceof StaffBookingWarningError) {
+      return NextResponse.json(
+        { error: e.message, warnings: e.warnings, requiresConfirmation: true },
+        { status: 409 },
+      )
+    }
     if (e instanceof SlotTakenError) {
       return NextResponse.json(
         { error: 'That time conflicts with the calendar or another appointment.' },

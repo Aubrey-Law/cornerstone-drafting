@@ -254,6 +254,7 @@ import {
   cancelAppointment,
   rescheduleAppointment,
   SlotTakenError,
+  StaffBookingWarningError,
 } from '@/lib/appointments/book'
 import { POST as publicBook } from '@/app/api/scheduling/book/route'
 import { POST as adminBook } from '@/app/api/admin/scheduling/appointments/route'
@@ -538,20 +539,76 @@ describe('bookAppointment', () => {
     expect(state.inserts.find(i => i.table === 'appointments')).toBeDefined()
   })
 
-  it('admin bookings bypass weekly hours but still reject hard conflicts', async () => {
+  it('admin bookings warn outside business hours and book once staff confirm', async () => {
     // Sunday 10:00 ET — outside weekly hours; a client booking would fail.
     const sunday = '2026-08-09T14:00:00.000Z'
-    await bookAppointment({ ...bookingInput(), source: 'admin', startIso: sunday })
-    expect(state.inserts.find(i => i.table === 'appointments')).toBeDefined()
+    const warned = await bookAppointment({ ...bookingInput(), source: 'admin', startIso: sunday }).catch(e => e)
+    expect(warned).toBeInstanceOf(StaffBookingWarningError)
+    expect((warned as StaffBookingWarningError).warnings.map(w => w.kind)).toEqual(['outside_hours'])
+    expect(state.inserts.find(i => i.table === 'appointments')).toBeUndefined()
 
-    // Same slot with a calendar conflict is still rejected.
-    state.reset()
+    await bookAppointment({ ...bookingInput(), source: 'admin', startIso: sunday, overrideWarnings: true })
+    const insert = state.inserts.find(i => i.table === 'appointments')
+    expect(insert?.values).toMatchObject({ start_time: sunday, source: 'admin' })
+    // Off-hours alone is not an overlap: the row keeps the overlap guard.
+    expect(insert?.values.raw).toBeUndefined()
+  })
+
+  it('admin bookings warn on overlaps and mark a confirmed overlap for the database guard', async () => {
     state.busy = [
-      { start: Date.parse('2026-08-09T14:00:00Z'), end: Date.parse('2026-08-09T15:00:00Z') },
+      { start: Date.parse('2026-08-10T14:00:00Z'), end: Date.parse('2026-08-10T15:00:00Z') },
+    ]
+    const warned = await bookAppointment({ ...bookingInput(), source: 'admin' }).catch(e => e)
+    expect(warned).toBeInstanceOf(StaffBookingWarningError)
+    expect((warned as StaffBookingWarningError).warnings.map(w => w.kind)).toEqual(['conflict'])
+
+    await bookAppointment({ ...bookingInput(), source: 'admin', overrideWarnings: true })
+    expect(state.inserts.find(i => i.table === 'appointments')?.values.raw).toEqual({ staffOverlapConfirmed: true })
+  })
+
+  it('books an off-grid in-hours staff time with no warning', async () => {
+    // Monday 10:07 ET — not on the public slot grid, but inside hours and free.
+    await bookAppointment({ ...bookingInput(), source: 'admin', startIso: '2026-08-10T14:07:00.000Z' })
+    expect(state.inserts.find(i => i.table === 'appointments')?.values.start_time).toBe('2026-08-10T14:07:00.000Z')
+  })
+
+  it('client bookings ignore overrideWarnings and stay limited to open slots', async () => {
+    const sunday = '2026-08-09T14:00:00.000Z'
+    await expect(
+      bookAppointment({ ...bookingInput(), startIso: sunday, overrideWarnings: true }),
+    ).rejects.toThrow(SlotTakenError)
+    state.busy = [
+      { start: Date.parse('2026-08-10T14:00:00Z'), end: Date.parse('2026-08-10T15:00:00Z') },
     ]
     await expect(
-      bookAppointment({ ...bookingInput(), source: 'admin', startIso: sunday }),
+      bookAppointment({ ...bookingInput(), source: 'portal', overrideWarnings: true }),
     ).rejects.toThrow(SlotTakenError)
+    expect(state.inserts.find(i => i.table === 'appointments')).toBeUndefined()
+  })
+
+  it('the admin route asks staff to confirm an off-hours time, then books it', async () => {
+    const sunday = '2026-08-09T23:30:00.000Z' // Sunday 7:30 PM ET
+    const post = (extra: Record<string, unknown> = {}) => adminBook(new NextRequest('http://localhost/api/admin/scheduling/appointments', {
+      method: 'POST',
+      body: JSON.stringify({ typeId: TYPE.id, startIso: sunday, attendeeFirstName: 'Pat', attendeeLastName: 'Client', attendeeEmail: 'pat@example.com', ...extra }),
+    }))
+    const warned = await post()
+    expect(warned.status).toBe(409)
+    expect(await warned.json()).toMatchObject({ requiresConfirmation: true, warnings: [{ kind: 'outside_hours' }] })
+    expect(state.inserts.find(i => i.table === 'appointments')).toBeUndefined()
+
+    const booked = await post({ overrideWarnings: true })
+    expect(booked.status).toBe(200)
+    expect(state.inserts.find(i => i.table === 'appointments')?.values.start_time).toBe(sunday)
+  })
+
+  it('the public route still rejects an off-hours time, even when asked to override', async () => {
+    const response = await publicBook(new NextRequest('http://localhost/api/scheduling/book', {
+      method: 'POST',
+      body: JSON.stringify({ typeKey: 'discovery_call', startTime: '2026-08-09T23:30:00.000Z', firstName: 'Pat', lastName: 'Client', email: 'pat@example.com', overrideWarnings: true }),
+    }))
+    expect(response.status).toBe(409)
+    expect(state.inserts.find(i => i.table === 'appointments')).toBeUndefined()
   })
 
   it('stores the chosen meeting format and uses it for the calendar event', async () => {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CalendarPlus, Check, Search } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, Check, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,8 +12,11 @@ import { type BookingQuestion, MAX_ANSWER_LENGTH } from '@/lib/appointments/book
 import { normalizeBookingNames, splitDisplayName } from '@/lib/appointments/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import SlotPicker, { type SlotPickerLoadResult } from '@/components/scheduling/SlotPicker'
+import { zonedTimeToUtcMs } from '@/lib/appointments/availability'
+import type { StaffBookingWarning } from '@/lib/appointments/book'
 import { FIRM_TIMEZONE } from '@/lib/firmDate'
 import { cn } from '@/lib/utils'
+import { instantDayKey, zonedTimeInput } from './calendarTime'
 import {
   LOCATION_LABEL,
   allowedFormats,
@@ -129,6 +132,24 @@ export function formatSlotSummary(iso: string, timezone: string): string {
   return `${day} · ${time}`
 }
 
+/**
+ * The instant for a staff-typed date ("YYYY-MM-DD") and time ("HH:mm") in the
+ * firm's time zone, or null while either is incomplete.
+ */
+export function anyTimeStartIso(date: string, time: string, timezone: string): string | null {
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  const clock = /^(\d{2}):(\d{2})$/.exec(time)
+  if (!day || !clock) return null
+  const ms = zonedTimeToUtcMs({
+    year: Number(day[1]),
+    month: Number(day[2]),
+    day: Number(day[3]),
+    hour: Number(clock[1]),
+    minute: Number(clock[2]),
+  }, timezone)
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null
+}
+
 function slotDetailText(slot: OpenSlot | undefined): string | null {
   if (!slot) return null
   const notes = [
@@ -166,7 +187,7 @@ export function QuickBookPopover({
       <PopoverContent align="end" className="w-[440px] max-w-[calc(100vw-2rem)] p-0">
         <div className="border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold text-foreground">Quick book</h2>
-          <p className="text-xs text-muted-foreground">Choose a verified opening and email the confirmation.</p>
+          <p className="text-xs text-muted-foreground">Choose an opening or any time, and email the confirmation.</p>
         </div>
         <QuickBookForm
           active={open}
@@ -226,6 +247,12 @@ export function QuickBookForm({
   // Every opening the picker has loaded, by start; only these can be booked.
   const [verifiedSlots, setVerifiedSlots] = useState<Map<string, OpenSlot>>(() => new Map())
   const [booking, setBooking] = useState(false)
+  // "Any time": staff type a date and time instead of picking an opening.
+  const [anyTime, setAnyTime] = useState(false)
+  const [anyDate, setAnyDate] = useState(() => prefillIso ? instantDayKey(prefillIso, timezone) : '')
+  const [anyClock, setAnyClock] = useState(() => prefillIso ? zonedTimeInput(prefillIso, timezone) : '')
+  // Overlap / off-hours warnings from the server, shown until staff confirm.
+  const [warnings, setWarnings] = useState<StaffBookingWarning[] | null>(null)
   const [teamsConnected, setTeamsConnected] = useState(false)
   const selectedType = types.find(type => type.id === draft.typeId)
   const questions = selectedType?.bookingQuestions ?? []
@@ -249,6 +276,13 @@ export function QuickBookForm({
       startIso: prefillIso ?? current.startIso,
     }))
   }, [open, prefillIso, types, attendee])
+
+  // A time clicked on the calendar also fills the "Any time" fields.
+  useEffect(() => {
+    if (!open || !prefillIso) return
+    setAnyDate(instantDayKey(prefillIso, timezone))
+    setAnyClock(zonedTimeInput(prefillIso, timezone))
+  }, [open, prefillIso, timezone])
 
   // Booking from a lead or matter page: replace the prefill's names with the
   // record's stored first/last components.
@@ -316,10 +350,17 @@ export function QuickBookForm({
   }, [])
 
   const slotVerified = Boolean(draft.startIso) && verifiedSlots.has(draft.startIso)
+  const anyTimeIso = anyTime ? anyTimeStartIso(anyDate, anyClock, timezone) : null
+  const chosenIso = anyTime ? anyTimeIso : slotVerified ? draft.startIso : null
 
-  async function submit() {
-    if (!slotVerified) { toast.error('Choose a verified available slot'); return }
-    if (!draft.attendeeEmail.trim() || !draft.typeId || !draft.startIso) {
+  // A different time, type or format needs its own check.
+  useEffect(() => {
+    setWarnings(null)
+  }, [chosenIso, typeId, locationType])
+
+  async function submit(overrideWarnings = false) {
+    if (!chosenIso) { toast.error(anyTime ? 'Enter a date and time' : 'Choose a verified available slot'); return }
+    if (!draft.attendeeEmail.trim() || !draft.typeId) {
       toast.error('Choose who, what, where, and when')
       return
     }
@@ -338,7 +379,8 @@ export function QuickBookForm({
           typeId: draft.typeId,
           locationType: draft.locationType,
           videoProvider: draft.locationType === 'teams' && teamsConnected ? draft.videoProvider : undefined,
-          startIso: draft.startIso,
+          startIso: chosenIso,
+          overrideWarnings: overrideWarnings || undefined,
           attendeeFirstName: draft.attendeeFirstName,
           attendeeLastName: draft.attendeeLastName,
           attendeeEmail: draft.attendeeEmail.trim(),
@@ -352,6 +394,10 @@ export function QuickBookForm({
         }),
       })
       const body = await response.json().catch(() => ({}))
+      if (response.status === 409 && body.requiresConfirmation && Array.isArray(body.warnings)) {
+        setWarnings(body.warnings)
+        return
+      }
       if (!response.ok) {
         toast.error(body.error ?? 'Booking failed')
         return
@@ -362,6 +408,10 @@ export function QuickBookForm({
         toast.success('Appointment booked — confirmation email sent')
       }
       setDraft(initialDraft(types, null, attendee))
+      setAnyTime(false)
+      setAnyDate('')
+      setAnyClock('')
+      setWarnings(null)
       setQuery('')
       setSearchLink(null)
       namesEdited.current = false
@@ -519,16 +569,47 @@ export function QuickBookForm({
           </Step>
 
           <Step number="4" title="When">
-            <div className="overflow-hidden rounded-lg border border-border">
-              {/* Remounts per type and format so the calendar opens fresh. */}
-              <SlotPicker
-                key={`${typeId}:${locationType}`}
-                loadSlots={loadSlots}
-                slotDetail={slotDetail}
-                selected={draft.startIso || null}
-                onSelect={onSelectSlot}
-              />
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {([
+                [false, 'Openings'],
+                [true, 'Any time'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setAnyTime(value)}
+                  className={cn('rounded-full border px-2.5 py-1 text-xs', anyTime === value ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-foreground hover:bg-accent')}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
+            {anyTime ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="quick-book-any-date">Date</Label>
+                  <Input id="quick-book-any-date" type="date" value={anyDate} onChange={event => setAnyDate(event.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="quick-book-any-time">Start time</Label>
+                  <Input id="quick-book-any-time" type="time" step={300} value={anyClock} onChange={event => setAnyClock(event.target.value)} />
+                </div>
+                <p className="text-micro text-muted-foreground sm:col-span-2">
+                  Ignores the public booking hours. You&apos;ll be warned before booking over busy time or outside business hours.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-border">
+                {/* Remounts per type and format so the calendar opens fresh. */}
+                <SlotPicker
+                  key={`${typeId}:${locationType}`}
+                  loadSlots={loadSlots}
+                  slotDetail={slotDetail}
+                  selected={draft.startIso || null}
+                  onSelect={onSelectSlot}
+                />
+              </div>
+            )}
           </Step>
 
           {questions.length > 0 && (
@@ -549,12 +630,25 @@ export function QuickBookForm({
             </Step>
           )}
         </div>
+        {warnings && warnings.length > 0 && (
+          <div role="alert" className="border-t border-border bg-warning/10 px-4 py-3 text-xs text-warning">
+            <p className="flex items-center gap-1.5 font-medium"><AlertTriangle className="h-3.5 w-3.5" />Book this time anyway?</p>
+            <ul className="mt-1 list-disc pl-5">
+              {warnings.map(warning => <li key={warning.kind}>{warning.message}</li>)}
+            </ul>
+          </div>
+        )}
         <div className="flex items-center justify-between border-t border-border px-4 py-3">
-          <span className={cn('text-xs', slotVerified ? 'font-medium text-foreground' : 'text-muted-foreground')}>
-            {slotVerified ? formatSlotSummary(draft.startIso, timezone) : 'Choose a verified slot'}
+          <span className={cn('text-xs', chosenIso ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+            {chosenIso ? formatSlotSummary(chosenIso, timezone) : anyTime ? 'Enter a date and time' : 'Choose a verified slot'}
           </span>
-          <Button size="sm" disabled={booking || !slotVerified || !draft.attendeeEmail || !draft.attendeeFirstName.trim() || !draft.attendeeLastName.trim()} onClick={() => void submit()}>
-            {booking ? 'Booking…' : 'Book & email confirmation'}
+          <Button
+            size="sm"
+            variant={warnings?.length ? 'destructive' : 'default'}
+            disabled={booking || !chosenIso || !draft.attendeeEmail || !draft.attendeeFirstName.trim() || !draft.attendeeLastName.trim()}
+            onClick={() => void submit(Boolean(warnings?.length))}
+          >
+            {booking ? 'Booking…' : warnings?.length ? 'Book anyway' : 'Book & email confirmation'}
           </Button>
         </div>
     </>
