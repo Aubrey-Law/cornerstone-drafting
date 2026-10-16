@@ -8,7 +8,7 @@ import { recordDiscoveryAnchor } from '@/lib/bookings/discoveryAnchor'
 import { recordPmpsAnchor } from '@/lib/bookings/pmpsAnchor'
 import { createStandingIntakeVersion } from '@/lib/intake/standingLinks'
 import { portalUrl, appUrl } from '@/lib/urls'
-import { isSlotAvailable } from './availability'
+import { isSlotAvailable, isWithinBusinessHours } from './availability'
 import { type BookingAnswer, formatBookingAnswers } from './bookingQuestions'
 import { fetchAllBusy, AvailabilityUnavailableError } from './calendarBusy'
 import {
@@ -50,6 +50,24 @@ export class SlotTakenError extends Error {
 
 export { AvailabilityUnavailableError }
 
+export type StaffBookingWarningKind = 'conflict' | 'outside_hours'
+
+export interface StaffBookingWarning {
+  kind: StaffBookingWarningKind
+  message: string
+}
+
+/**
+ * A staff booking that overlaps busy time or falls outside business hours.
+ * Staff can book it anyway by resending with `overrideWarnings`.
+ */
+export class StaffBookingWarningError extends Error {
+  constructor(readonly warnings: StaffBookingWarning[]) {
+    super(warnings.map(warning => warning.message).join(' '))
+    this.name = 'StaffBookingWarningError'
+  }
+}
+
 export class BookingPausedError extends Error {
   constructor() {
     super('Online booking is temporarily paused. Please call or email us to schedule.')
@@ -86,6 +104,11 @@ export interface BookAppointmentInput {
    */
   linkedLeadId?: string | null
   linkedMatterId?: string | null
+  /**
+   * Staff only: book even though the time overlaps busy time or falls outside
+   * business hours. Without it those raise StaffBookingWarningError.
+   */
+  overrideWarnings?: boolean
 }
 
 export interface BookAppointmentResult {
@@ -441,11 +464,28 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
     new Date(start - DAY_MS),
     new Date(start + DAY_MS),
   )
+  let overlapConfirmed = false
   if (input.source === 'admin') {
-    // Staff bookings bypass client-facing rules (weekly hours, notice,
-    // horizon, buffer, slot grid) — only hard conflicts block them.
+    // Staff bookings bypass client-facing rules (notice, horizon, buffer,
+    // slot grid). Overlaps and off-hours times are warnings staff can
+    // override, not blocks.
     const end = start + input.type.durationMinutes * 60_000
-    if (busy.some(b => start < b.end && end > b.start)) throw new SlotTakenError()
+    const conflict = busy.some(b => start < b.end && end > b.start)
+    const warnings: StaffBookingWarning[] = []
+    if (conflict) {
+      warnings.push({ kind: 'conflict', message: 'That time overlaps another appointment or busy time on the calendar.' })
+    }
+    const inHours = isWithinBusinessHours(startIso, {
+      weeklyHours: effectiveWeeklyHours(settings.weeklyHours, input.type),
+      timezone: settings.timezone,
+      durationMinutes: input.type.durationMinutes,
+      dateOverrides: settings.dateOverrides,
+    })
+    if (!inHours) {
+      warnings.push({ kind: 'outside_hours', message: 'That time is outside business hours for this appointment type.' })
+    }
+    if (warnings.length > 0 && !input.overrideWarnings) throw new StaffBookingWarningError(warnings)
+    overlapConfirmed = conflict
   } else {
     const available = isSlotAvailable(startIso, {
       weeklyHours: effectiveWeeklyHours(settings.weeklyHours, input.type),
@@ -493,6 +533,9 @@ export async function bookAppointment(rawInput: BookAppointmentInput): Promise<B
       manage_token_hash: manage.tokenHash,
       manage_token_expires_at: manage.expiresAt,
       source: input.source,
+      // A confirmed staff overlap is left out of appointments_no_overlap;
+      // client bookings still see it as busy time.
+      ...(overlapConfirmed ? { raw: { staffOverlapConfirmed: true } } : {}),
     })
     .select('id')
     .single()

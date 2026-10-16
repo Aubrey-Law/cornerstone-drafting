@@ -6,13 +6,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@/lib/auth/AuthTokenProvider', () => ({ useAccessToken: () => 'token-1' }))
 
 import { ScheduleAppointmentDialog } from '@/components/scheduling/ScheduleAppointmentDialog'
-import { formatSlotSummary } from '@/app/admin/calendar/QuickBookPopover'
+import { anyTimeStartIso, formatSlotSummary } from '@/app/admin/calendar/QuickBookPopover'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 describe('formatSlotSummary', () => {
   it('shows the weekday, date and time in the firm zone', () => {
     expect(formatSlotSummary('2026-10-12T18:00:00.000Z', 'America/New_York')).toBe('Mon, Oct 12 · 2:00 PM EDT')
+  })
+})
+
+describe('anyTimeStartIso', () => {
+  it('reads a typed date and time in the firm zone', () => {
+    expect(anyTimeStartIso('2026-10-12', '19:30', 'America/New_York')).toBe('2026-10-12T23:30:00.000Z')
+    expect(anyTimeStartIso('2026-12-14', '08:00', 'America/New_York')).toBe('2026-12-14T13:00:00.000Z')
+    expect(anyTimeStartIso('2026-10-12', '', 'America/New_York')).toBeNull()
   })
 })
 
@@ -95,5 +103,60 @@ describe('ScheduleAppointmentDialog', () => {
     resolveStored!({ attendee: { firstName: 'Mary Jane', lastName: 'van Buren', email: 'mary@example.com', phone: '', secondFirstName: 'Sam', secondLastName: 'Jones', secondEmail: '' } })
     await waitFor(() => expect((screen.getByLabelText('Last name') as HTMLInputElement).value).toBe('van Buren'))
     expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('Mary Jane')
+  })
+
+  it('books a typed time outside the openings after staff confirm the warning', async () => {
+    const posted: Record<string, unknown>[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body))
+        posted.push(body)
+        if (!body.overrideWarnings) {
+          return { ok: false, status: 409, json: async () => ({
+            error: 'That time is outside business hours for this appointment type.',
+            requiresConfirmation: true,
+            warnings: [{ kind: 'outside_hours', message: 'That time is outside business hours for this appointment type.' }],
+          }) }
+        }
+        return { ok: true, status: 200, json: async () => ({ ok: true }) }
+      }
+      if (url.startsWith('/api/admin/scheduling/settings')) {
+        return { ok: true, json: async () => ({
+          settings: { timezone: 'America/New_York' },
+          types: [{ id: 'type-1', label: 'Design Meeting', durationMinutes: 60, locationType: 'phone', locationTypes: ['phone'], active: true, bookingQuestions: [] }],
+        }) }
+      }
+      if (url.startsWith('/api/admin/scheduling/slots')) {
+        return { ok: true, json: async () => ({ connected: true, horizonDays: 180, slots: [] }) }
+      }
+      return { ok: false, json: async () => ({}) }
+    }))
+    const onBooked = vi.fn()
+    render(
+      <ScheduleAppointmentDialog
+        target={{ kind: 'lead', id: 'lead-1' }}
+        attendee={{ firstName: 'Mary', lastName: 'Jones', email: 'mary@example.com' }}
+        open
+        onOpenChange={vi.fn()}
+        onBooked={onBooked}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Any time' }))
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-12' } })
+    fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '19:30' } })
+    const evening = '2026-10-12T23:30:00.000Z'
+    expect(await screen.findByText(formatSlotSummary(evening, 'America/New_York'))).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Book & email confirmation' }))
+    expect(await screen.findByText('That time is outside business hours for this appointment type.')).toBeTruthy()
+    expect(onBooked).not.toHaveBeenCalled()
+    expect(posted[0]).toMatchObject({ startIso: evening })
+    expect(posted[0].overrideWarnings).toBeUndefined()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Book anyway' }))
+    await waitFor(() => expect(posted).toHaveLength(2))
+    expect(posted[1]).toMatchObject({ startIso: evening, overrideWarnings: true })
+    await waitFor(() => expect(onBooked).toHaveBeenCalled())
   })
 })

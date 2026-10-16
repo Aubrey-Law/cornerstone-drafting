@@ -20,6 +20,16 @@ describe('Calendly appointment calendar mirror', () => {
     )
   })
 
+  it('keeps the overlap guard for native bookings except a staff-confirmed overlap', () => {
+    const migration = read(
+      'supabase/migrations/20271016090000_staff_confirmed_appointment_overlap.sql',
+    )
+
+    expect(migration).toMatch(
+      /appointments_no_overlap[\s\S]*status = 'scheduled'[\s\S]*source in \('public', 'portal', 'admin'\)[\s\S]*raw ->> 'staffOverlapConfirmed'/i,
+    )
+  })
+
   it('upserts the provider booking into the native appointments table', () => {
     const sync = read('lib/bookings/sync.ts')
 

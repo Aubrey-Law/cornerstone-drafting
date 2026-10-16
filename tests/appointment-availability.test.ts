@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeSlots,
   isSlotAvailable,
+  isWithinBusinessHours,
   zonedTimeToUtcMs,
   type ComputeSlotsInput,
 } from '@/lib/appointments/availability'
@@ -291,5 +292,34 @@ describe('meeting formats', () => {
     expect(resolveLocationType('phone', type)).toBe('in_person') // not offered
     expect(resolveLocationType(null, type)).toBe('in_person')
     expect(resolveLocationType('garbage', type)).toBe('in_person')
+  })
+})
+
+describe('isWithinBusinessHours', () => {
+  const input = {
+    weeklyHours: hours({ mon: [{ start: '09:00', end: '12:00' }] }),
+    timezone: TZ,
+    durationMinutes: 30,
+  }
+
+  it('accepts any start whose meeting fits a window, on or off the slot grid', () => {
+    // Mon 2026-07-20 09:00 and 10:07 ET (EDT = UTC-4).
+    expect(isWithinBusinessHours('2026-07-20T13:00:00.000Z', input)).toBe(true)
+    expect(isWithinBusinessHours('2026-07-20T14:07:00.000Z', input)).toBe(true)
+    expect(isWithinBusinessHours('2026-07-20T15:30:00.000Z', input)).toBe(true)
+  })
+
+  it('rejects evenings, closed days, and meetings that run past the window', () => {
+    expect(isWithinBusinessHours('2026-07-20T23:00:00.000Z', input)).toBe(false) // 7 PM
+    expect(isWithinBusinessHours('2026-07-21T13:00:00.000Z', input)).toBe(false) // Tuesday
+    expect(isWithinBusinessHours('2026-07-20T15:45:00.000Z', input)).toBe(false) // ends 12:15
+  })
+
+  it('uses a date override in place of the weekly hours', () => {
+    expect(isWithinBusinessHours('2026-07-20T13:00:00.000Z', { ...input, dateOverrides: { '2026-07-20': [] } })).toBe(false)
+    expect(isWithinBusinessHours('2026-07-21T22:00:00.000Z', {
+      ...input,
+      dateOverrides: { '2026-07-21': [{ start: '17:00', end: '20:00' }] },
+    })).toBe(true)
   })
 })

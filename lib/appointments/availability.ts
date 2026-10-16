@@ -203,3 +203,29 @@ export function isSlotAvailable(
   })
   return slots.includes(new Date(start).toISOString())
 }
+
+/**
+ * True when the whole meeting sits inside one of that day's business-hours
+ * windows (weekly hours, or the date's override). Ignores notice, horizon,
+ * buffers, the slot grid and busy time — staff use it to flag off-hours
+ * bookings, not to block them.
+ */
+export function isWithinBusinessHours(
+  startIso: string,
+  input: Pick<ComputeSlotsInput, 'weeklyHours' | 'timezone' | 'durationMinutes' | 'dateOverrides'>,
+): boolean {
+  const start = Date.parse(startIso)
+  if (!Number.isFinite(start)) return false
+  const end = start + input.durationMinutes * MINUTE_MS
+  const parts = wallPartsAt(start, input.timezone)
+  const wall: WallDate = { year: parts.year, month: parts.month, day: parts.day }
+  const dateKey = `${wall.year}-${String(wall.month).padStart(2, '0')}-${String(wall.day).padStart(2, '0')}`
+  const windows = input.dateOverrides?.[dateKey] ?? input.weeklyHours[weekdayOf(wall)] ?? []
+  return windows.some(window => {
+    const windowStart = parseHHMM(window.start)
+    const windowEnd = parseHHMM(window.end)
+    if (!windowStart || !windowEnd) return false
+    return zonedTimeToUtcMs({ ...wall, ...windowStart }, input.timezone) <= start
+      && end <= zonedTimeToUtcMs({ ...wall, ...windowEnd }, input.timezone)
+  })
+}
