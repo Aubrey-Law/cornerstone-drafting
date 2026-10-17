@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin, redirectToLogin } from '@/lib/apiAuth'
 import { getMicrosoftAuthUrl, getMicrosoftConfigIssue } from '@/lib/microsoftTeams'
 import { getRequestOrigin } from '@/lib/requestOrigin'
+import { beginOAuthState } from '@/lib/auth/oauthState'
 
 export async function GET(req: NextRequest) {
-  const { err } = await requireAdmin(req)
-  if (err) {
-    if (err.status === 401) return redirectToLogin(req)
+  const { err, userId } = await requireAdmin(req)
+  if (err || !userId) {
+    if (!err || err.status === 401) return redirectToLogin(req)
     return err
   }
 
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
   }
 
   const returnTo = req.nextUrl.searchParams.get('returnTo') || '/admin/settings?tab=google'
-  const state = Buffer.from(JSON.stringify({ returnTo })).toString('base64url')
-  return NextResponse.redirect(getMicrosoftAuthUrl(state))
+  // The callback stores tokens only for this browser and this staff user.
+  const { state, withCookie } = beginOAuthState('microsoft', userId, returnTo)
+  return withCookie(NextResponse.redirect(getMicrosoftAuthUrl(state)))
 }

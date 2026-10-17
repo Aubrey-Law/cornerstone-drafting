@@ -28,12 +28,27 @@ vi.mock('@/lib/supabaseAdmin', () => ({
 }))
 
 import { GET } from '@/app/api/admin/google/callback/route'
-import type { NextRequest } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
+import { beginOAuthState } from '@/lib/auth/oauthState'
 
-function request(params: Record<string, string>): NextRequest {
+/** What the connect route hands the browser: `state` plus its cookie value. */
+function started(userId = 'user-1') {
+  const { state, withCookie } = beginOAuthState('google', userId, '/admin/settings?tab=google')
+  const cookie = withCookie(NextResponse.next()).cookies.get('cs_oauth_google')?.value ?? ''
+  return { state, cookie }
+}
+
+function request(params: Record<string, string>, cookie: string | null = null): NextRequest {
   const url = new URL('https://app.test/api/admin/google/callback')
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
-  return { nextUrl: url } as unknown as NextRequest
+  const cookies = { get: (name: string) => (name === 'cs_oauth_google' && cookie ? { name, value: cookie } : undefined) }
+  return { nextUrl: url, cookies } as unknown as NextRequest
+}
+
+/** A callback from the browser that began the connect, as `user-1`. */
+function ownRequest(params: Record<string, string>): NextRequest {
+  const { state, cookie } = started()
+  return request({ ...params, state }, cookie)
 }
 
 function state(value: Record<string, unknown>): string {
@@ -58,7 +73,7 @@ describe('the google callback', () => {
       access_token: 'a', refresh_token: 'r', expires_in: 3600, scope: 'openid',
     })
 
-    const res = await GET(request({ code: 'abc' }))
+    const res = await GET(ownRequest({ code: 'abc' }))
 
     expect(res.status).toBe(307)
     expect(res.headers.get('location')).toContain('gcal_connected=1')
@@ -74,7 +89,7 @@ describe('the google callback', () => {
     // nothing about the symptom points at it.
     mocks.exchangeCode.mockResolvedValue({ access_token: 'a', expires_in: 3600 })
 
-    const res = await GET(request({ code: 'abc' }))
+    const res = await GET(ownRequest({ code: 'abc' }))
 
     expect(mocks.store).not.toHaveBeenCalled()
     expect(locationText(res)).toMatch(/myaccount\.google\.com\/permissions/)
@@ -83,7 +98,7 @@ describe('the google callback', () => {
   it('refuses a caller who is not staff', async () => {
     mocks.maybeSingle.mockResolvedValue({ data: { role: 'client' } })
 
-    const res = await GET(request({ code: 'abc' }))
+    const res = await GET(ownRequest({ code: 'abc' }))
 
     expect(res.headers.get('location')).toContain('gcal_error=forbidden')
     expect(mocks.exchangeCode).not.toHaveBeenCalled()
@@ -92,7 +107,7 @@ describe('the google callback', () => {
   it('refuses an anonymous caller', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } })
 
-    const res = await GET(request({ code: 'abc' }))
+    const res = await GET(ownRequest({ code: 'abc' }))
 
     expect(res.headers.get('location')).toContain('gcal_error=forbidden')
     expect(mocks.exchangeCode).not.toHaveBeenCalled()
@@ -122,5 +137,53 @@ describe('the google callback', () => {
 
     expect(res.headers.get('location')).toContain('gcal_error=no_code')
     expect(mocks.store).not.toHaveBeenCalled()
+  })
+
+  it('refuses a callback whose state did not start in this browser', async () => {
+    // Anyone can build a consent URL with our public client id. Without the
+    // cookie the connect route set, the grant must not be stored.
+    const { state: forged } = started()
+    const res = await GET(request({ code: 'abc', state: forged }))
+
+    expect(locationText(res)).toMatch(/different browser/)
+    expect(mocks.exchangeCode).not.toHaveBeenCalled()
+    expect(mocks.store).not.toHaveBeenCalled()
+  })
+
+  it('refuses a state whose nonce does not match the cookie', async () => {
+    const mine = started()
+    const other = started()
+    const res = await GET(request({ code: 'abc', state: other.state }, mine.cookie))
+
+    expect(locationText(res)).toMatch(/different browser/)
+    expect(mocks.store).not.toHaveBeenCalled()
+  })
+
+  it('never authenticates from a bearer token placed in state', async () => {
+    // The old callback accepted state.token as the staff session, which let a
+    // staff member's JWT ride a consent URL clicked by someone else.
+    const res = await GET(request({ code: 'abc', state: state({ token: 'staff-jwt', returnTo: '/admin' }) }))
+
+    expect(mocks.exchangeCode).not.toHaveBeenCalled()
+    expect(mocks.store).not.toHaveBeenCalled()
+    expect(locationText(res)).toMatch(/different browser/)
+  })
+
+  it('refuses when the signed-in user is not the one who started the connect', async () => {
+    const { state: begun, cookie } = started('user-2')
+    const res = await GET(request({ code: 'abc', state: begun }, cookie))
+
+    expect(res.headers.get('location')).toContain('gcal_error=forbidden')
+    expect(mocks.exchangeCode).not.toHaveBeenCalled()
+  })
+
+  it('clears the single-use state cookie on the way out', async () => {
+    mocks.exchangeCode.mockResolvedValue({
+      access_token: 'a', refresh_token: 'r', expires_in: 3600, scope: 'openid',
+    })
+
+    const res = await GET(ownRequest({ code: 'abc' }))
+
+    expect(res.headers.get('set-cookie')).toMatch(/cs_oauth_google=;.*Max-Age=0/i)
   })
 })
