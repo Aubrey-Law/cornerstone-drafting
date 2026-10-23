@@ -218,6 +218,8 @@ export function fieldsToTemplateData(fields: RealEstateTransferFields): Record<s
   data.current_deed_page = fields.current_deed_page ?? fields.prior_deed_page ?? ''
   data.current_deed_document_number = fields.current_deed_document_number ?? ''
   data.current_certificate_number = fields.current_certificate_number ?? fields.certificate_number ?? ''
+  // Same Registry / Land Court decision as the deed, for the certificate's recording line.
+  data.is_land_court = deedTemplateVariant(fields) === DEED_TEMPLATE_VARIANTS.land_court
   data.grantee_mailing_address = fields.grantee_mailing_address ?? propertyAddress
   data.property_address_line = propertyAddress
   data.document_date_blank = '________________________'
