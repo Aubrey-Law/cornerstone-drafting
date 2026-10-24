@@ -16,6 +16,8 @@ design_sheets (Postgres)
 
 Asset transfer docs (deed, trustee's certificate, real estate trust) use a **separate** path via `generateAssetTransferFilesFromDesignSheet()` and do not go through the main estate generator packages.
 
+For a plain list of every question on the sheet and the choices it offers, see [design-sheet-questions.md](../design-sheet-questions.md).
+
 ## Section index
 
 | Section | Guide | Feeds generator? |
