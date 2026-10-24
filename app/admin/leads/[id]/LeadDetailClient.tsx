@@ -82,6 +82,7 @@ import {
 } from '@/components/layout/ResponsiveDetailRail'
 import { intakeTrackLabel, type IntakeTrack } from '@/lib/intakeTrack'
 import { LeadIntakeCard } from './LeadIntakeCard'
+import { LeadEngagementPill } from '@/components/leads/LeadEngagementPill'
 import { MatterFormsCard } from '@/components/forms/MatterFormsCard'
 import { SendSchedulingLinkDialog } from '@/components/scheduling/SendSchedulingLinkDialog'
 import { BookingPageDialog } from '@/components/scheduling/BookingPageDialog'
@@ -932,6 +933,15 @@ export function LeadDetailClient({
         chips={[
           // The intake track often reads the same as the practice area; show it once.
           ...new Set([practiceAreaLabel(lead.practice_area), ...(lead.intake_track ? [intakeTrackLabel(lead.intake_track as IntakeTrack)] : [])]),
+          <LeadEngagementPill
+            key="engagement"
+            agreementStatus={engagementStatus}
+            signedAt={lead.engagement_signed_at}
+            // Sent by the app, the agreement's own status says so; this is for the ones that were not.
+            engagementSentOutside={agreementSentInApp(activeAgreement?.status) ? undefined : Boolean(lead.engagement_sent_at || lead.engagement_signed_at)}
+            onEngagementSentOutside={lead.matter_id && lead.lead_status === 'lead' ? markEngagementSentOutside : undefined}
+            onEngagement={() => changeTab('documents')}
+          />,
           ...(lead.lead_status === 'lost' || lead.lead_status === 'declined'
             ? [<Badge key="status" variant="outline" className="rounded-md border-destructive/40 font-medium text-destructive">{statusLabel}</Badge>]
             : []),
@@ -1048,12 +1058,9 @@ export function LeadDetailClient({
                 <LeadOverview lead={lead} nextAppointmentAt={nextAppointmentAt} nextAppointmentLabel={nextAppointmentLabel}
                   lastContactAt={effectiveLastTouchAt} lastResponseAt={effectiveLastResponseAt}
                   updatedAt={newestTimestamp([recordUpdatedAt, lead.updated_at, ...activity.map(row => row.created_at), ...notes.map(note => note.updatedAt)])}
-                  agreementStatus={engagementStatus} timeZone={firmTimezone}
-                  // Sent by the app, the agreement's own status says so; this is for the ones that were not.
-                  engagementSentOutside={agreementSentInApp(activeAgreement?.status) ? undefined : Boolean(lead.engagement_sent_at || lead.engagement_signed_at)}
-                  onEngagementSentOutside={lead.matter_id && lead.lead_status === 'lead' ? markEngagementSentOutside : undefined}
+                  timeZone={firmTimezone}
                   taskCount={taskCounts.open} tasksVersion={tasksVersion}
-                  onIntake={() => changeTab('intake')} onEngagement={() => changeTab('documents')}
+                  onIntake={() => changeTab('intake')}
                   onTasks={() => changeTab('tasks')} onSchedule={() => setScheduleAppointmentOpen(true)} />
                 <LeadConflictCard
                   leadId={lead.id}
