@@ -292,6 +292,53 @@ describe('renderRealEstateTransferPackage', () => {
     expect(xml.match(/______________________________________/g)).toHaveLength(3)
   })
 
+  it('fills the trustee certificate from current deed fields', () => {
+    const result = renderRealEstateTransferPackage(['trustees_certificate'], {
+      ...sampleFields,
+      legal_description: undefined,
+      prior_deed_book: undefined,
+      prior_deed_page: undefined,
+      prior_deed_date: undefined,
+      registry_district: undefined,
+      certificate_number: undefined,
+      recording_system: 'registry',
+      property_description: 'A certain parcel of land in Boston.',
+      recording_date: '2019-04-02',
+      registry_of_deeds: 'Suffolk County Registry of Deeds',
+      current_deed_book_number: '55555',
+      current_deed_page: '88',
+    })
+    const xml = new PizZip(result.buffer).file('word/document.xml')!.asText()
+    expect(xml).toContain('A certain parcel of land in Boston.')
+    expect(xml).toContain(
+      'recorded on 2019-04-02 with the Suffolk County Registry of Deeds in Book 55555, Page 88.',
+    )
+    expect(xml).not.toContain('Certificate of Title')
+    expect(xml).not.toMatch(/\{[#^/]?[a-z_]+\}/)
+  })
+
+  it('uses the Land Court recording line on the trustee certificate for registered land', () => {
+    const result = renderRealEstateTransferPackage(['trustees_certificate'], {
+      ...sampleFields,
+      recording_system: 'land_court',
+      recording_date: '2019-04-02',
+      registry_of_deeds: 'Middlesex South Registry District of the Land Court',
+      current_deed_document_number: '1234567',
+      current_certificate_number: '987654',
+    })
+    const xml = new PizZip(result.buffer).file('word/document.xml')!.asText()
+    expect(xml).toContain('as Document No. 1234567 and noted on Certificate of Title No. 987654.')
+    expect(xml).not.toContain('in Book')
+  })
+
+  it('renders a trustee certificate from legacy stored deed fields', () => {
+    const result = renderRealEstateTransferPackage(['trustees_certificate'], sampleFields)
+    const xml = new PizZip(result.buffer).file('word/document.xml')!.asText()
+    expect(xml).toContain('Lot 1 on Plan Book 10 Page 5.')
+    expect(xml).toContain('in Book 12345, Page 67.')
+    expect(xml).toContain('2018-03-15')
+  })
+
   it('renders a ZIP when multiple documents are selected', () => {
     const result = renderRealEstateTransferPackage(
       ['deed', 'trustees_certificate', 'real_estate_trust'],
