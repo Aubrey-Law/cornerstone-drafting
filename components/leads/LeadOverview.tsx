@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { useAccessToken } from '@/lib/auth/AuthTokenProvider'
 import { compareTasks, isTaskOpen, formatTaskDate, type TaskRow } from '@/lib/tasks/types'
 import { getLeadIntakeProgress } from '@/lib/leads/intakeProgress'
@@ -29,8 +28,8 @@ export function leadNextMeetingDate(value: string | null | undefined, timeZone: 
 }
 
 export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastResponseAt, updatedAt,
-  agreementStatus, timeZone, taskCount, tasksVersion, onIntake, onEngagement, onTasks, onSchedule,
-  engagementSentOutside, onEngagementSentOutside, nextAppointmentLabel = 'Next meeting', readiness,
+  timeZone, taskCount, tasksVersion, onIntake, onTasks, onSchedule,
+  nextAppointmentLabel = 'Next meeting', readiness,
 }: {
   lead: LeadDetailRecord
   nextAppointmentAt: string | null
@@ -39,27 +38,14 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
   lastContactAt: string | null
   lastResponseAt: string | null
   updatedAt: string | null
-  agreementStatus?: string | null
   timeZone: string
   taskCount: number
   tasksVersion: number
   onIntake: () => void
-  onEngagement: () => void
   onTasks: () => void
   onSchedule: () => void
-  /**
-   * Whether the engagement is recorded as sent outside the app. Undefined when
-   * the app sent it itself, which its own status already shows.
-   */
-  engagementSentOutside?: boolean
-  onEngagementSentOutside?: (sent: boolean) => Promise<void>
 }) {
   const token = useAccessToken()
-  const sentOutsideId = useId()
-  const [savingSentOutside, setSavingSentOutside] = useState(false)
-  // A signed engagement is not un-sent from here: that would clear the signature too.
-  const engagementSigned = Boolean(lead.engagement_signed_at) || agreementStatus === 'signed' || agreementStatus === 'completed'
-  const showSentOutside = engagementSentOutside !== undefined && Boolean(onEngagementSentOutside) && !engagementSigned
   const [nextTask, setNextTask] = useState<TaskRow | null>(null)
   const [taskError, setTaskError] = useState(false)
   const [taskLoading, setTaskLoading] = useState(taskCount > 0)
@@ -87,23 +73,6 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
   const intakeStep = (<OverviewFact label="Intake" value={intakeReceived ? 'Intake received' : segments.length ? `${completed} of ${segments.length} sections complete` : 'Questionnaire progress unavailable'}>
           <Button variant="link" className="h-auto p-0" onClick={onIntake}>Review intake</Button>
         </OverviewFact>)
-  const engagementStep = (<OverviewFact label="Engagement" value={engagementSigned ? 'Signed' : agreementStatus ? (agreementStatus.charAt(0).toUpperCase() + agreementStatus.slice(1)).replaceAll('_', ' ') : 'Not prepared'}>
-          {showSentOutside && (
-            <div className="flex items-center gap-2 py-1">
-              <Checkbox
-                id={sentOutsideId}
-                checked={engagementSentOutside}
-                disabled={savingSentOutside}
-                onCheckedChange={checked => {
-                  setSavingSentOutside(true)
-                  void onEngagementSentOutside!(checked === true).finally(() => setSavingSentOutside(false))
-                }}
-              />
-              <label htmlFor={sentOutsideId} className="text-sm">Sent outside the app</label>
-            </div>
-          )}
-          <Button variant="link" className="h-auto p-0" onClick={onEngagement}>View engagement details</Button>
-        </OverviewFact>)
   const meetingDate = leadNextMeetingDate(nextAppointmentAt, timeZone)
   return (
     <section aria-label="Lead overview" className="space-y-4">
@@ -113,16 +82,15 @@ export function LeadOverview({ lead, nextAppointmentAt, lastContactAt, lastRespo
         </OverviewFact>
         {readiness}
         {!intakeReceived && intakeStep}
-        {!engagementSigned && engagementStep}
         <OverviewFact label="Next task" value={taskLoading ? 'Loading…' : taskError ? 'Task status unavailable' : nextTask?.title ?? (taskCount > 0 ? 'Open the task queue' : 'No open tasks')}>
           {nextTask && !taskError && <p className="text-xs text-muted-foreground">{nextTask.assignee_name || 'Unassigned'} · {formatTaskDate(nextTask.due_at ?? nextTask.soft_due_at)}</p>}
           {taskError && <button className="text-sm underline" onClick={() => setRetry(value => value + 1)}>Couldn’t load tasks. Retry</button>}
           <Button variant="link" className="h-auto p-0" onClick={onTasks}>View tasks ({taskCount})</Button>
         </OverviewFact>
       </div>
-      {(intakeReceived || engagementSigned) && <details className="rounded-lg border bg-card px-4 py-3.5 text-sm">
-        <summary className="cursor-pointer font-medium">Completed steps ({Number(intakeReceived) + Number(engagementSigned)})</summary>
-        <div className="mt-3 space-y-3">{intakeReceived && intakeStep}{engagementSigned && engagementStep}</div>
+      {intakeReceived && <details className="rounded-lg border bg-card px-4 py-3.5 text-sm">
+        <summary className="cursor-pointer font-medium">Completed steps (1)</summary>
+        <div className="mt-3 space-y-3">{intakeStep}</div>
       </details>}
       <details className="rounded-lg border bg-card px-4 py-3.5 text-xs text-muted-foreground"><summary className="cursor-pointer font-medium">Contact history</summary><dl className="mt-3 space-y-3">
         <div><dt className="text-xs text-muted-foreground">Last client contact</dt><dd className="mt-1">{leadDisplayDate(lastContactAt, timeZone)}</dd></div>
