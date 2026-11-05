@@ -50,6 +50,8 @@ Review step (`SigningMechanicsSection.tsx`) and are documented in
 The College Preparation Plan is a second plan track rather than another section
 of the estate plan: `decisions.plan_track === 'college_prep'` replaces the
 section list above with a student-sized one. See its guide for the full mapping.
+The questions themselves — intake questionnaire and design-sheet fields — are
+in [college-prep-plan-intake-and-design-sheet.md](../college-prep-plan-intake-and-design-sheet.md).
 
 ## Template authoring conventions
 
