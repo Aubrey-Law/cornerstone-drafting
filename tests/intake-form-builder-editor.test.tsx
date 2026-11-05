@@ -98,6 +98,21 @@ describe('visual intake editor', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
+  it('adds a College Preparation Plan section from the library and explains questions already in the form', () => {
+    mount(); click('Add College Preparation section')
+    const dialog = screen.getByRole('dialog', { name: 'College Preparation sections' })
+    expect(within(dialog).getByRole('combobox', { name: 'Search section library' })).toBeTruthy()
+    const student = within(dialog).getByRole('option', { name: /Student Information/ })
+    expect(student.getAttribute('aria-disabled')).toBe('true')
+    expect(student.textContent).toMatch(/already in this form/)
+    fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: 'FERPA' } })
+    fireEvent.click(screen.getByRole('option', { name: /School Information/ }))
+    expect(screen.queryByRole('dialog', { name: 'College Preparation sections' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Select section School Information' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Select item College / university / program' })).toBeTruthy()
+    expect(screen.getByText('Unsaved changes')).toBeTruthy()
+  })
+
   it('adds sections and approved items, searches labels/descriptions/IDs, and explains disabled choices', () => {
     mount(); click('Add section'); change('Section title', 'Extra')
     click('Add item to Extra')
@@ -200,6 +215,7 @@ describe('visual intake editor', () => {
   it('keeps published versions read-only', () => {
     const data = fixture(); data.draft = null; data.versions[0].status = 'published'; mount(data)
     expect((screen.getByRole('button', { name: 'Add section' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Add College Preparation section' }) as HTMLButtonElement).disabled).toBe(true)
     change('Form title', 'Attempted edit')
     expect((screen.getByLabelText('Form title') as HTMLInputElement).value).toBe('Estate intake')
     expect(screen.queryByText('Unsaved changes')).toBeNull()

@@ -21,8 +21,8 @@ export const COLLEGE_PREP_INTAKE_FORM: IntakeFormDefinition = {
         { kind: 'field', id: 'client_citizenship', fieldId: 'client_citizenship' },
         { kind: 'field', id: 'client_email', fieldId: 'client_email' },
         { kind: 'field', id: 'client_phone', fieldId: 'client_phone', labelOverride: 'Cell phone' },
-        { kind: 'block', id: 'address', blockId: 'address', config: { profile: 'college', includeCounty: false } },
         { kind: 'field', id: 'client_dob', fieldId: 'client_dob' },
+        { kind: 'block', id: 'address', blockId: 'address', config: { profile: 'college', includeCounty: false } },
         { kind: 'field', id: 'county', fieldId: 'county' },
       ],
     },
@@ -52,7 +52,7 @@ export const COLLEGE_PREP_INTAKE_FORM: IntakeFormDefinition = {
       items: [
         { kind: 'block', id: 'college_agents', blockId: 'college_agents' },
         { kind: 'block', id: 'college_hipaa_recipients', blockId: 'college_hipaa_recipients' },
-        { kind: 'field', id: 'college_excluded_people', fieldId: 'college_excluded_people' },
+        { kind: 'field', id: 'college_excluded_people', fieldId: 'college_excluded_people', helpText: 'Naming someone here is not an accusation — it is an instruction we can put in writing so a provider is never left guessing.' },
       ],
     },
     {

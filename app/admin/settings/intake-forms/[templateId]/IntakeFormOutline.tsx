@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, type ReactNode, type DragEvent } from 'react'
-import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, GripVertical, Library, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { IntakeFormDefinition, IntakeFormItem } from '@/lib/intake/forms/types'
 import type { IntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog'
@@ -14,9 +14,9 @@ export function itemLabel(item: IntakeFormItem, catalog: IntakeFormBuilderCatalo
 }
 
 type DragState = { kind: 'section' | 'item'; id: string; sectionId?: string }
-export function IntakeFormOutline({ definition, catalog, selection, onSelect, onAddSection, onAddItem, onRemove, onMoveSection, onMoveItem, inlineInspector, readOnly = false }: {
+export function IntakeFormOutline({ definition, catalog, selection, onSelect, onAddSection, onOpenLibrary, onAddItem, onRemove, onMoveSection, onMoveItem, inlineInspector, readOnly = false }: {
   definition: IntakeFormDefinition; catalog: IntakeFormBuilderCatalog; selection: EditorSelection
-  onSelect: (selection: EditorSelection) => void; onAddSection: () => void; onAddItem: (sectionId: string) => void
+  onSelect: (selection: EditorSelection) => void; onAddSection: () => void; onOpenLibrary?: () => void; onAddItem: (sectionId: string) => void
   onRemove: (selection: Exclude<EditorSelection, { kind: 'form' }>) => void
   onMoveSection: (id: string, toIndex: number) => void
   onMoveItem: (itemId: string, toSectionId: string, toIndex: number) => void
@@ -71,6 +71,9 @@ export function IntakeFormOutline({ definition, catalog, selection, onSelect, on
         <Button variant="outline" size="sm" className="mt-3" disabled={readOnly || section.items.length >= 100} onClick={() => onAddItem(section.id)}><Plus className="mr-1 size-4" />Add item to {section.title}</Button>
       </li>)}
     </ol>
-    <Button variant="outline" disabled={readOnly || definition.sections.length >= 40} onClick={onAddSection}><Plus className="mr-1 size-4" />Add section</Button>
+    <div className="flex flex-wrap gap-2">
+      <Button variant="outline" disabled={readOnly || definition.sections.length >= 40} onClick={onAddSection}><Plus className="mr-1 size-4" />Add section</Button>
+      {onOpenLibrary && <Button variant="outline" disabled={readOnly || definition.sections.length >= 40} onClick={onOpenLibrary}><Library className="mr-1 size-4" aria-hidden="true" />Add College Preparation section</Button>}
+    </div>
   </div>
 }

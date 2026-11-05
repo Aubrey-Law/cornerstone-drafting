@@ -36,6 +36,7 @@ describe('staff discovery form',()=>{
  it('filters builder catalog by purpose',()=>{
   expect(getIntakeFormBuilderCatalog('discovery_call').fields.map(f=>f.id)).toEqual(DISCOVERY_FIELD_IDS)
   expect(getIntakeFormBuilderCatalog('discovery_call').blocks).toEqual([])
+  expect(getIntakeFormBuilderCatalog('discovery_call').sections).toEqual([])
   expect(getIntakeFormBuilderCatalog().fields.some(f=>f.id.startsWith('discovery_'))).toBe(false)
  })
  it('evaluates required answers and conditional insurance without changing attribution',()=>{

@@ -16,7 +16,7 @@ vi.mock('@/lib/intake/forms/repository', () => ({
 const ACTOR = '10000000-0000-4000-8000-000000000001'
 const HASHES = {
   estate: '4cea350d23fe6b2e0a003131ed2648dd77d1bdb6582a55ed42d83d2e473ee319',
-  college_prep: '4b0f24336186bf0aa3a2c0cb8c80647b081f3fd0c1aee60ac6303980b319b7e2',
+  college_prep: '095a278ab3218c5d2419b4e72ee5b09fe2d51116c9b51ac5c2006ab395dddebe',
 }
 const NOW = '2026-10-08T12:00:00Z'
 function existing(key: 'estate' | 'college_prep'): ExistingBundledIntakeForm {

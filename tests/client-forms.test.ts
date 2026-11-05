@@ -62,7 +62,7 @@ describe('client form definitions', () => {
   })
 
   it('has no catalog entries for client forms and only lets editors add questions there', () => {
-    expect(getIntakeFormBuilderCatalog('client_form')).toEqual({ fields: [], blocks: [] })
+    expect(getIntakeFormBuilderCatalog('client_form')).toEqual({ fields: [], blocks: [], sections: [] })
     const base = addSection(createBlankDefinition({ key: 'k', title: 'T', purpose: 'client_form' }), { title: 'S', audience: 'client_and_staff' }, () => 'a')
     const sectionId = base.sections[0].id
     const withQuestion = addItem(base, sectionId, { kind: 'question', label: 'New question', questionType: 'short_text' }, () => 'b')

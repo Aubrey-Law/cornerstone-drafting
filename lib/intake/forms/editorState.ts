@@ -1,6 +1,6 @@
 import { getFormField as getBuilderField } from '@/lib/discovery/catalog'
 import { getIntakeBlock } from './blockRegistry'
-import { getIntakeFormBuilderCatalog, type BuilderCatalogField } from './builderCatalog'
+import { getIntakeFormBuilderCatalog, type BuilderCatalogField, type BuilderCatalogSection } from './builderCatalog'
 import type { IntakeFormDefinition, IntakeFormItem, IntakeFormSection } from './types'
 
 export type EditorSelection =
@@ -55,6 +55,30 @@ function itemLocation(definition: IntakeFormDefinition, id: string): { sectionIn
 
 export function createBlankDefinition(input: Pick<IntakeFormDefinition, 'key' | 'title' | 'description' | 'purpose'>): IntakeFormDefinition {
   return { schemaVersion: 1, ...input, sections: [] }
+}
+
+/** Insert a library section with fresh ids. Refuses a field or block the form already contains. */
+export function addLibrarySection(
+  definition: IntakeFormDefinition,
+  section: Pick<BuilderCatalogSection, 'label' | 'description' | 'audience' | 'optional' | 'timeEstimateMinutes' | 'items'>,
+  factory: EditorIdFactory = () => globalThis.crypto.randomUUID(),
+): IntakeFormDefinition {
+  const usedFields = new Set(definition.sections.flatMap(existing => existing.items.flatMap(item => item.kind === 'field' ? [item.fieldId] : [])))
+  const usedBlocks = new Set(definition.sections.flatMap(existing => existing.items.flatMap(item => item.kind === 'block' ? [item.blockId] : [])))
+  for (const item of section.items) {
+    if (item.kind === 'field' && usedFields.has(item.fieldId)) throw new Error(`Field "${item.fieldId}" is already used in this form`)
+    if (item.kind === 'block' && usedBlocks.has(item.blockId)) throw new Error(`Block "${item.blockId}" is already used in this form`)
+  }
+  let next = addSection(definition, {
+    title: section.label,
+    audience: section.audience,
+    ...(section.description ? { subtitle: section.description } : {}),
+    ...(section.timeEstimateMinutes != null ? { timeEstimateMinutes: section.timeEstimateMinutes } : {}),
+    ...(section.optional ? { optional: true } : {}),
+  }, factory)
+  const sectionId = next.sections.at(-1)!.id
+  for (const item of section.items) next = addItem(next, sectionId, item, factory)
+  return next
 }
 
 export function addSection(definition: IntakeFormDefinition, input: NewSection, factory: EditorIdFactory = () => globalThis.crypto.randomUUID()): IntakeFormDefinition {

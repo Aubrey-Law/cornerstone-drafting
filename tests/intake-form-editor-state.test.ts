@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  addItem, addSection, createBlankDefinition, definitionFingerprint, eligibleConditionFields,
+  addItem, addLibrarySection, addSection, createBlankDefinition, definitionFingerprint, eligibleConditionFields,
   moveItem, moveSection, removeItem, removeSection, selectionAfterRemoval, targetForDiagnostic,
   updateItem, updateSection,
 } from '@/lib/intake/forms/editorState'
 import { compileIntakeForm } from '@/lib/intake/forms/compiler'
+import { getIntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
 
 function fixture(): IntakeFormDefinition {
@@ -88,6 +89,22 @@ describe('immutable intake editor operations', () => {
       .toMatchObject({ id: 'item_12345678', fieldId: 'client_email', labelOverride: 'Email address' })
     const generated = addSection(fixture(), { title: 'Generated', audience: 'staff_only' })
     expect(generated.sections[2].id).toMatch(/^section_[a-f0-9]{32}$/)
+  })
+
+  it('inserts a library section with fresh ids and refuses questions the form already has', () => {
+    const school = getIntakeFormBuilderCatalog().sections.find(section => section.id === 'cp_school')!
+    const added = addLibrarySection(fixture(), school, () => '1234-5678')
+    const section = added.sections[2]
+    expect(section).toMatchObject({ title: 'School Information', subtitle: school.description, timeEstimateMinutes: 2, audience: 'client_and_staff' })
+    expect(section.id).toBe('section_12345678')
+    expect(section.items.map(item => item.id)).toEqual(school.items.map((_, index) => index === 0 ? 'item_12345678' : `item_12345678_${index + 1}`))
+    expect(section.items[0]).toMatchObject({ fieldId: 'college_school_name', requirement: 'required' })
+    const original = fixture()
+    expect(addLibrarySection(original, school, () => 'abc')).not.toBe(original)
+    expect(original.sections).toHaveLength(2)
+    expect(() => addLibrarySection(added, school, () => 'again')).toThrow(/college_school_name/)
+    const review = getIntakeFormBuilderCatalog().sections.find(section => section.id === 'review')!
+    expect(() => addLibrarySection(fixture(), review, () => 'again')).toThrow(/review_submit/)
   })
 
   it('prevents global duplicate fields and unapproved additions', () => {

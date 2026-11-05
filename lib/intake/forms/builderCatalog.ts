@@ -4,7 +4,8 @@ import {
   type BuilderFieldDef, type FieldOption, type SharedFieldControl,
 } from '@aubrey-law/estate-fields/core'
 import { getIntakeBlock } from './blockRegistry'
-import type { IntakeAudience, IntakeBlockId, IntakeFormPurpose, IntakeRequirement } from './types'
+import { COLLEGE_PREP_INTAKE_FORM } from './definitions/collegePrep'
+import type { IntakeAudience, IntakeBlockId, IntakeFormItem, IntakeFormPurpose, IntakeRequirement } from './types'
 
 export interface BuilderCatalogField {
   id: FormFieldId
@@ -31,9 +32,26 @@ export interface BuilderCatalogBlock {
   configControls: BuilderConfigControl[]
 }
 
+export type BuilderCatalogSectionItem =
+  | Omit<Extract<IntakeFormItem, { kind: 'field' }>, 'id'>
+  | Omit<Extract<IntakeFormItem, { kind: 'block' }>, 'id'>
+
+/** A complete questionnaire section that can be inserted into a client intake. */
+export interface BuilderCatalogSection {
+  id: string
+  label: string
+  description: string
+  group: string
+  audience: IntakeAudience
+  optional: boolean
+  timeEstimateMinutes: number | null
+  items: BuilderCatalogSectionItem[]
+}
+
 export interface IntakeFormBuilderCatalog {
   fields: BuilderCatalogField[]
   blocks: BuilderCatalogBlock[]
+  sections: BuilderCatalogSection[]
 }
 
 const CONTROL_DESCRIPTION = {
@@ -73,10 +91,32 @@ function fieldGroup(id: FormFieldId): string {
   return 'Background'
 }
 
+const COLLEGE_PREP_LIBRARY_GROUP = 'College Preparation Plan'
+
+function libraryItem(item: IntakeFormItem): BuilderCatalogSectionItem {
+  if (item.kind === 'question') throw new Error('Section library entries cannot contain custom questions')
+  const { id: _id, ...rest } = structuredClone(item)
+  return rest
+}
+
+/** The College Preparation Plan questionnaire, as insertable sections. */
+function collegePreparationSections(): BuilderCatalogSection[] {
+  return COLLEGE_PREP_INTAKE_FORM.sections.map(section => ({
+    id: section.id,
+    label: section.title,
+    description: section.subtitle ?? '',
+    group: COLLEGE_PREP_LIBRARY_GROUP,
+    audience: section.audience,
+    optional: section.optional === true,
+    timeEstimateMinutes: section.timeEstimateMinutes ?? null,
+    items: section.items.map(libraryItem),
+  }))
+}
+
 /** Explicit display-only projection. Never send executable registry definitions to the browser. */
 export function getIntakeFormBuilderCatalog(purpose: IntakeFormPurpose = 'client_intake'): IntakeFormBuilderCatalog {
   // Client forms hold only custom questions; nothing in them writes canonical data.
-  if (purpose === 'client_form') return { fields: [], blocks: [] }
+  if (purpose === 'client_form') return { fields: [], blocks: [], sections: [] }
   return {
     fields: (purpose === 'discovery_call' ? DISCOVERY_FIELD_IDS : BUILDER_FIELD_IDS).map(id => {
       const field = getFormField(id)
@@ -106,5 +146,6 @@ export function getIntakeFormBuilderCatalog(purpose: IntakeFormPurpose = 'client
         ] : [],
       }
     }),
+    sections: purpose === 'discovery_call' ? [] : collegePreparationSections(),
   }
 }

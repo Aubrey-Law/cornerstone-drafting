@@ -8,10 +8,11 @@ import type { IntakeFormEditorSnapshot } from '@/lib/intake/forms/persistenceTyp
 import type { IntakeFormBuilderCatalog } from '@/lib/intake/forms/builderCatalog'
 import type { IntakeFormDefinition } from '@/lib/intake/forms/types'
 import type { IntakeFormDiagnostic } from '@/lib/intake/forms/compiler'
-import { addItem, addSection, moveItem, moveSection, removeItem, removeSection, selectionAfterRemoval, targetForDiagnostic, updateItem, updateSection, type EditorSelection } from '@/lib/intake/forms/editorState'
+import { addItem, addLibrarySection, addSection, moveItem, moveSection, removeItem, removeSection, selectionAfterRemoval, targetForDiagnostic, updateItem, updateSection, type EditorSelection } from '@/lib/intake/forms/editorState'
 import { IntakeFormOutline } from './IntakeFormOutline'
 import { IntakeFormInspector } from './IntakeFormInspector'
 import { IntakeCatalogDrawer } from './IntakeCatalogDrawer'
+import { IntakeSectionLibraryDrawer } from './IntakeSectionLibraryDrawer'
 import { IntakeFormDiagnostics } from './IntakeFormDiagnostics'
 import { useIntakeFormDraft } from './useIntakeFormDraft'
 import { IntakeFormPreview } from './IntakeFormPreview'
@@ -30,6 +31,7 @@ export function IntakeFormEditorClient({ initialSnapshot, catalog }: { initialSn
   const [selection, setSelection] = useState<EditorSelection>({ kind: 'form' })
   const [mode, setMode] = useState<'build' | 'preview'>('build')
   const [catalogSection, setCatalogSection] = useState<string | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [removing, setRemoving] = useState<Exclude<EditorSelection, { kind: 'form' }> | null>(null)
   const [confirming, setConfirming] = useState<'publish' | 'discard' | 'retire' | 'reload' | null>(null)
   const dialogTrigger = useRef<HTMLElement | null>(null)
@@ -91,10 +93,17 @@ export function IntakeFormEditorClient({ initialSnapshot, catalog }: { initialSn
     {mode === 'build' ? <div className="grid items-start gap-5 md:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
       <IntakeFormOutline definition={localDefinition} catalog={catalog} selection={selection} onSelect={setSelection} readOnly={readOnly} inlineInspector={wide ? undefined : inspector}
         onAddSection={() => { const next = addSection(localDefinition, { title: 'New section', audience: localDefinition.purpose === 'discovery_call' ? 'staff_only' : 'client_and_staff' }); change(next); setSelection({ kind: 'section', sectionId: next.sections.at(-1)!.id }) }}
+        onOpenLibrary={catalog.sections.length > 0 ? () => { rememberFocus(); setLibraryOpen(true) } : undefined}
         onAddItem={id => { rememberFocus(); setCatalogSection(id) }} onRemove={target => { rememberFocus(); setRemoving(target) }} onMoveSection={(id, index) => change(moveSection(localDefinition, id, index))} onMoveItem={move} />
       {wide && <div className="sticky top-4 min-w-0 max-h-[calc(100vh-2rem)] overflow-auto">{inspector}</div>}
     </div> : <IntakeFormPreview localDefinition={localDefinition} />}
     <IntakeFormDiagnostics diagnostics={diagnostics} definition={localDefinition} catalog={catalog} onNavigate={navigate} />
+    <IntakeSectionLibraryDrawer definition={localDefinition} catalog={catalog} open={libraryOpen} onRestoreFocus={restoreFocus} onClose={() => setLibraryOpen(false)} onAdd={sectionId => {
+      const section = catalog.sections.find(entry => entry.id === sectionId)
+      if (!section) return
+      const next = addLibrarySection(localDefinition, section)
+      change(next); setSelection({ kind: 'section', sectionId: next.sections.at(-1)!.id }); setLibraryOpen(false)
+    }} />
     <IntakeCatalogDrawer definition={localDefinition} catalog={catalog} sectionId={catalogSection} onRestoreFocus={restoreFocus} onClose={() => setCatalogSection(null)} onAdd={item => {
       if (!catalogSection) return
       const next = addItem(localDefinition, catalogSection, item)
